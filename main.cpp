@@ -26,7 +26,6 @@ public:
     //void dfs();                     //迭代形式的dfs
     void solve();
     void solveDFS(int head,int cur,int depth,vector<int> &out);
-    void sortResult();
     void saveData();
 
 
@@ -71,7 +70,9 @@ void Solution::loadData()
     close(fd);
     //cout<<mbuf[10]<<"."<<mbuf[11]<<mbuf[12]<<"."<<mbuf[13]<<endl;  //第11个是'\r',第12个是'\n'
     int id1=0,id2=0;
+#ifdef TEST
     cout<<"loading data ..."<<endl;
+#endif
     for(char *p=mbuf;*p&&p-mbuf<len;p++)
     {
         while(*p!=',')
@@ -90,7 +91,9 @@ void Solution::loadData()
         //p++;
     }
     munmap(mbuf,len);
+#ifdef TEST
     cout<<"done!"<<endl;
+#endif
 }
 
 void Solution::constructGraph()
@@ -407,25 +410,12 @@ void Solution::dfs()
 }
 */
 
-void Solution::sortResult()
-{
-    //继续优化：多线程分别运行sort()，或者直接用set存储results[3]
-    cout<<"sorting result ..."<<endl;
-    for(int l=3;l<=7;l++)
-    {
-        ringCnt+=results[l].size();
-        sort(results[l].begin(),results[l].end());
-    }
-    cout<<"done!"<<endl;
-    cout<<"总环数： "<<ringCnt<<endl;
-    //for(auto& result:results[3])
-    //    cout<<result[0]<<" ";
-}
-
 void Solution::saveData()
 {
     //fwrite或者mmap写
+#ifdef TEST
     cout<<"saving data ..."<<endl;
+#endif
     // for(int i=DEPTH_LOW_LIMIT;i<=DEPTH_HIGH_LIMIT;i++) {
     //         //sort(ans[i].begin(),ans[i].end());
     //         for (auto &x:ans[i]) {
@@ -446,7 +436,7 @@ void Solution::saveData()
     //output<<ringCnt<<endl;
     for(int l=DEPTH_LOW;l<=DEPTH_HIGH;l++)
     {
-        sort(results[l].begin(),results[l].end());
+        //sort(results[l].begin(),results[l].end());
         for(auto& result:results[l]){
             int sz=result.size();
             for(int j=0;j<sz-1;j++){
@@ -476,8 +466,9 @@ void Solution::saveData()
     munmap(pbuf,mod);
 
     close(fd);
-
+#ifdef TEST
     cout<<"done!"<<endl;
+#endif
 }
 
 
@@ -502,7 +493,6 @@ int main(int argc, char *argv[])
     //solution.dfs();
     solution.solve();
 
-    //solution.sortResult();
     solution.saveData();
 
     return 0;
