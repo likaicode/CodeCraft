@@ -12,3 +12,5 @@ git版本控制参考网址https://blog.csdn.net/tina_ttl/article/details/513266
 编译：g++ -O3 main.cpp -o test -lpthread
 
 执行：./test
+
+git remote add origin https://github.com/你的github用户名/你的github仓库.git  
