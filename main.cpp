@@ -43,11 +43,12 @@ private:
     vector<string> idsLF; //0...n to sorted id
     vector<int> inputs; //u-v pairs
     vector<bool> visit;
-    vector<int> reachable;
+    vector<bool> reachable;
 
     vector<unordered_map<int,vector<int>>> R;
 
-    int threadNum=4;      //线程数
+    int threadNum;      //线程数
+    bool runThread;     //根据图的边数和节点数决定是否开启线程
 
 public:
     vector<int> inDegrees;
@@ -55,11 +56,8 @@ public:
 
 };
 
-Solution::Solution(string testF, string resultF)
-{
-    testFile=testF;
-    resultFile=resultF;
-}
+//初始化
+Solution::Solution(string testF, string resultF):testFile(testF),resultFile(resultF),threadNum(4),runThread(false){}
 
 void Solution::loadData()
 {
@@ -155,15 +153,15 @@ void Solution::simplifyAndSort(vector<int> &deg,bool sorting)
 void Solution::constructReverseIndex()
 {
     //vector<unordered_map<int,vector<int>>> R;
-    //使用R[j][i][k]来表示结点i到达结点j，中间经过结点k的路径详情，如果k不在我们已经搜索过的结点列表中，并且i是起点，那么j-k-i就是符合要求的路径的一部分。
+    //使用R[i][j][k]来表示结点j到达结点i，中间经过结点k的路径详情，如果k不在我们已经搜索过的结点列表中，并且i是起点，那么j-k-i就是符合要求的路径的一部分。
     //具体来说，就是提前做深度为2的搜索（保存最后一层结点的入边），在第6层时直接根据现有结果进行判断，不进入第七层。
     R.resize(nodeCnt);
-    for(int i=0;i<nodeCnt;i++){
-        auto &vec=G[i];
+    for(int j=0;j<nodeCnt;j++){
+        auto &vec=G[j];
         for(int &k:vec){//对i的所有邻接点k进行遍历 
             auto &veck=G[k];
-            for(int &j:veck){//对k的所有邻接点j进行遍历
-                if(j!=i) R[j][i].push_back(k);//节点i能够通过节点k访问到节点j
+            for(int &i:veck){//对k的所有邻接点j进行遍历
+                if(j>i&&k>i) R[i][j].push_back(k);//节点j能够通过节点k访问到节点i i!=j
             }
         }
     }
@@ -195,10 +193,10 @@ void Solution::solveDFS(int head,int cur,int depth,vector<int> &out)
                 solveDFS(head,*it,depth+1,out);
             }
         }
-    }else if(reachable[cur]>-1 && depth==DEPTH_HIGH-1){ //handle [7]
+    }else if(reachable[cur] && depth==DEPTH_HIGH-1){ //handle [7]
         auto ks=R[head][cur];
         int sz=ks.size();
-        for(int idx=reachable[cur];idx<sz;++idx){
+        for(int idx=0;idx<sz;++idx){
             int k=ks[idx];
             if(visit[k]) continue;
             auto tmp=out;
@@ -219,7 +217,7 @@ void Solution::solve()
     ringCnt=0;
     visit=vector<bool>(nodeCnt,false);
     vector<int> out;
-    reachable=vector<int>(nodeCnt,-1);
+    reachable=vector<bool>(nodeCnt,false);
     vector<int> currentJs(nodeCnt);
     for(int i=0;i<nodeCnt;++i){
 #ifdef TEST
@@ -229,17 +227,20 @@ void Solution::solve()
             //可以通过大于head的id返回的
             for(auto &js:R[i]){
                 int j=js.first;
-                if(j>i){
-                    auto &val=js.second;
-                    int sz=val.size();
-                    int lb=lower_bound(val.begin(),val.end(),i)-val.begin();
-                    if(lb<val.size()) reachable[j]=lb;
-                    currentJs.push_back(j);  //存储大于i的j的数值
-                }
+                reachable[j]=true;
+                currentJs.push_back(j);
+                // int j=js.first;
+                // if(j>i){
+                //     auto &val=js.second;
+                //     int sz=val.size();
+                //     int lb=lower_bound(val.begin(),val.end(),i)-val.begin();
+                //     if(lb<val.size()) reachable[j]=lb;
+                //     currentJs.push_back(j);  //存储大于i的j的数值
+                // }
             }
             solveDFS(i,i,1,out);
             for(int &x:currentJs)
-                reachable[x]=-1;
+                reachable[x]=false;
             currentJs.clear();
         }
     }
