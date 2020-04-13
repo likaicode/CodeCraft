@@ -20,10 +20,11 @@ class Solution{
 public:
     Solution(string testFile, string resultFile);
     void loadData();
+
     void constructGraph();
     void simplifyAndSort(vector<int> &deg,bool sorting);
     void constructReverseIndex();
-    //void dfs();                     //迭代形式的dfs
+
     void solve();
     void solveDFS(int head,int cur,int depth,vector<int> &out);
     void saveData();
@@ -32,8 +33,6 @@ public:
 private:
     string testFile;
     string resultFile;
-    //unordered_map<int, vector<int>> dataMap;  //邻接表,存储每个账户所有的转出账户，隐藏属性：出度为0的节点没有计入，入度为0的点其对应的vector的size()为0
-    //unordered_map<int, bool> visitMap;         //已访问矩阵，用于dfs的访问记录
     vector<vector<int>> results[8];  //按环的长度从3到7储存结果
     int nodeCnt=0;   //记录节点数
     int ringCnt=0;   //记录总环数
@@ -47,6 +46,8 @@ private:
     vector<int> reachable;
 
     vector<unordered_map<int,vector<int>>> R;
+
+    int threadNum=4;      //线程数
 
 public:
     vector<int> inDegrees;
@@ -81,14 +82,11 @@ void Solution::loadData()
             p++;
         }
         while(*(++p)!=',') id2=id2*10+(*p-'0');
-        //dataMap[id1].push_back(id2);
-        //visitMap[id1]=false;
         inputs.push_back(id1);
         inputs.push_back(id2);
         //cout<<id1<<" ";
         id1=0;id2=0;
         while(*(++p)!='\n');
-        //p++;
     }
     munmap(mbuf,len);
 #ifdef TEST
@@ -161,14 +159,14 @@ void Solution::constructReverseIndex()
     //具体来说，就是提前做深度为2的搜索（保存最后一层结点的入边），在第6层时直接根据现有结果进行判断，不进入第七层。
     R.resize(nodeCnt);
     for(int i=0;i<nodeCnt;i++){
-            auto &vec=G[i];
-            for(int &k:vec){//对i的所有邻接点k进行遍历 
-                auto &veck=G[k];
-                for(int &j:veck){//对k的所有邻接点j进行遍历
-                    if(j!=i) R[j][i].push_back(k);//节点i能够通过节点k访问到节点j
-                }
+        auto &vec=G[i];
+        for(int &k:vec){//对i的所有邻接点k进行遍历 
+            auto &veck=G[k];
+            for(int &j:veck){//对k的所有邻接点j进行遍历
+                if(j!=i) R[j][i].push_back(k);//节点i能够通过节点k访问到节点j
             }
         }
+    }
     for(int i=0;i<nodeCnt;i++){
         for(auto &x:R[i]){
             if(x.second.size()>1){
@@ -212,58 +210,12 @@ void Solution::solveDFS(int head,int cur,int depth,vector<int> &out)
     visit[cur]=false;
     out.pop_back();
 
-    /*
-    visit[cur]=true;
-    out.push_back(cur);
-    for(int &v:G[cur]){ //depth=6时，cur是第6层的一个点，判断这个节点的邻接表中的每个元素v是否有等于head的节点，相等则放入结果中，否则对该节点遍历下一层
-        if(v==head && depth>=3 && depth<=7){  //此条件在cur的邻接表中最多触发一次
-            vector<int> tmp;
-            for(int &x:out)
-                tmp.push_back(ids[x]);
-            results[depth].emplace_back(tmp);
-        }
-        if(depth<7 && !visit[v] && v>head){
-            solveDFS(head,v,depth+1,out);
-        }
-    }
-    //反向索引直接得出第7层结果，跳过第7次dfs
-    //优化效果不太好，若注释的话记得将上面的6改为7
-    if(depth==6 && !R[cur][head].empty()){
-        vector<int> tmp;
-        for(int &x:out)
-            tmp.push_back(ids[x]);
-        for(int& k:R[cur][head]){
-            //cout<<"第7层";
-            if(visit[k] || k<head) continue;
-            tmp.push_back(ids[k]);
-            results[depth+1].emplace_back(tmp);
-            tmp.pop_back();
-        }
-    }
-    
-    visit[cur]=false;
-    out.pop_back();
-    */
-/*
-    visitMap[cur]=true;
-    out.push_back(cur);
-    for(int& v:dataMap[cur]){
-        if(v==head && depth>=3 && depth<=7){
-            results[depth].emplace_back(out);
-        }
-        if(depth<7 && !visitMap[v] && v>head){
-            solveDFS(head,v,depth+1,out);
-        }
-    }
-    visitMap[cur]=false;
-    out.pop_back();
-*/
 }
 
 
 void Solution::solve()
 {
-    //solveDFS的外循环
+    //solveDFS的外循环，可以用多线程来并行优化
     ringCnt=0;
     visit=vector<bool>(nodeCnt,false);
     vector<int> out;
@@ -294,121 +246,7 @@ void Solution::solve()
 #ifdef TEST
     cout<<"total rings: "<<ringCnt<<endl;
 #endif
-/*
-    vector<int> out;
-    int cnt=0;  //dfs进度
-    for(auto& elem:dataMap){
-        cnt++;
-        if(cnt%100==0) cout<<cnt<<"/"<<nodeCnt<<endl;
-        solveDFS(elem.first,elem.first,1,out);
-    }
-*/
 }
-
-/*
-//禁忌的七重舞法天女
-void Solution::dfs()
-{
-    cout<<"search ..."<<endl;
-    for(auto &elem:dataMap)
-    {
-        vector<int> out;
-        int firstElem=elem.first;
-        out.emplace_back(firstElem);
-        visitMap[firstElem]=true;
-        for(int i2=0;i2<elem.second.size();i2++)
-        {
-            int temp2=elem.second[i2];
-            if(temp2<=firstElem) continue;  //判断要遍历的账户id是否小于最开始的id，保证结果的首元素值最小
-            out.emplace_back(temp2);
-            visitMap[temp2]=true;
-            for(int i3=0;i3<dataMap[temp2].size();i3++)
-            {
-                int temp3=dataMap[temp2][i3];
-                if(temp3<=firstElem||visitMap[temp3]) continue;  //确保要遍历的第3层元素值大于首元素且之前未被访问过
-                out.emplace_back(temp3);
-                visitMap[temp3]=true;
-                for(int i4=0;i4<dataMap[temp3].size();i4++)  //当长度为4时（包括首元素），需要检查第4个元素是否为首元素，以检测环的存在
-                {
-                    int temp4=dataMap[temp3][i4];
-                    if(temp4==firstElem)
-                    {
-                        results[3].emplace_back(out);
-                        continue;
-                    }
-                    if(temp4<firstElem||visitMap[temp4]) continue;
-                    out.emplace_back(temp4);
-                    visitMap[temp4]=true;
-                    //第5层循环遍历
-                    for(int i5=0;i5<dataMap[temp4].size();i5++)
-                    {
-                        int temp5=dataMap[temp4][i5];
-                        if(temp5==firstElem)
-                        {
-                            results[4].emplace_back(out);  //因为第5个元素等于首元素，所以成环，环的长度为4
-                            continue;
-                        }
-                        if(temp5<firstElem||visitMap[temp5]) continue;
-                        out.emplace_back(temp5);
-                        visitMap[temp5]=true;
-                        //第6层循环
-                        for(int i6=0;i6<dataMap[temp5].size();i6++)
-                        {
-                            int temp6=dataMap[temp5][i6];
-                            if(temp6==firstElem)
-                            {
-                                results[5].emplace_back(out);  //因为第5个元素等于首元素，所以成环，环的长度为4
-                                continue;
-                            }
-                            if(temp6<firstElem||visitMap[temp6]) continue;
-                            out.emplace_back(temp6);
-                            visitMap[temp6]=true;
-                            //第7层循环
-                            for(int i7=0;i7<dataMap[temp6].size();i7++)
-                            {
-                                int temp7=dataMap[temp6][i7];
-                                if(temp7==firstElem)
-                                {
-                                    results[6].emplace_back(out);  //因为第5个元素等于首元素，所以成环，环的长度为4
-                                    continue;
-                                }
-                                if(temp7<firstElem||visitMap[temp7]) continue;
-                                out.emplace_back(temp7);
-                                visitMap[temp7]=true;
-                                //第8层循环
-                                for(int i8=0;i8<dataMap[temp7].size();i8++)
-                                {
-                                    int temp8=dataMap[temp7][i8];
-                                    if(temp8==firstElem)
-                                    {
-                                        results[7].emplace_back(out);  //如果第8个元素等于首元素就加入out数组组成环，否则直接遍历下一个元素
-                                        //cout<<firstElem<<" ";
-                                    }
-                                }
-                                out.pop_back();  //弹出尾部元素temp7
-                                visitMap[temp7]=false;
-                            }
-                            out.pop_back();
-                            visitMap[temp6]=false;
-                        }
-                        out.pop_back();
-                        visitMap[temp5]=false;
-                    }
-                    out.pop_back();
-                    visitMap[temp4]=false;
-                }
-                out.pop_back();
-                visitMap[temp3]=false;
-            }
-            out.pop_back();
-            visitMap[temp2]=false;
-        }
-        out.pop_back();
-        visitMap[firstElem]=false;
-    }
-    cout<<"done!"<<endl;
-}
-*/
 
 void Solution::saveData()
 {
@@ -416,24 +254,8 @@ void Solution::saveData()
 #ifdef TEST
     cout<<"saving data ..."<<endl;
 #endif
-    // for(int i=DEPTH_LOW_LIMIT;i<=DEPTH_HIGH_LIMIT;i++) {
-    //         //sort(ans[i].begin(),ans[i].end());
-    //         for (auto &x:ans[i]) {
-    //             auto path = x.path;
-    //             int sz = path.size();
-    //             //idx=0;
-    //             for(int j=0;j<sz-1;j++){
-    //                 auto res=idsComma[path[j]];
-    //                 fwrite(res.c_str(), res.size() , sizeof(char), fp );
-    //             }
-    //             auto res=idsLF[path[sz-1]];
-    //             fwrite(res.c_str(), res.size() , sizeof(char), fp );
-    //         }
-    // }
     //结果转成字符串
     string resultStr(to_string(ringCnt)+"\n");
-    //ofstream output(resultFile);
-    //output<<ringCnt<<endl;
     for(int l=DEPTH_LOW;l<=DEPTH_HIGH;l++)
     {
         //sort(results[l].begin(),results[l].end());
@@ -455,7 +277,9 @@ void Solution::saveData()
     char* pbuf=NULL;
     int cnt=len/strLen;
     int mod=len%strLen;
-    //cout<<cnt<<" "<<mod<<endl;
+#ifdef TEST
+    cout<<cnt<<"MB+"<<mod<<endl;
+#endif
     for(int i=0;i<cnt;i++){
         pbuf=(char *)mmap(NULL,strLen,PROT_READ|PROT_WRITE,MAP_SHARED,fd,i*strLen);
         memcpy(pbuf,resultStr.substr(i*strLen,strLen).c_str(),strLen);
@@ -476,7 +300,6 @@ void Solution::saveData()
 int main(int argc, char *argv[])
 {
 #ifdef TEST
-    //string testFile="./data/2020HuaweiCodecraft-TestData-master/38252/test_data.txt";
     string testFile="./data/test_data.txt";
     string resultFile="./projects/student/result.txt";
 #else
@@ -486,11 +309,13 @@ int main(int argc, char *argv[])
 
     Solution solution(testFile,resultFile);
     solution.loadData();
+
     solution.constructGraph();
     solution.simplifyAndSort(solution.inDegrees,false);
     solution.simplifyAndSort(solution.outDegrees,true);
+
     solution.constructReverseIndex();
-    //solution.dfs();
+
     solution.solve();
 
     solution.saveData();
