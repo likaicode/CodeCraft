@@ -26,19 +26,20 @@ int ringCnt=0;   //记录总环数
 unordered_map<int,int> idHash;  //sorted id to 0...n
 //vector<string> idsCom; //0...n to sorted id
 //vector<string> idsLF; //0...n to sorted id
-vector<int> inputs; //u-v pairs
+//vector<int> inputs; //u-v pairs
+int inputs[560000];
 //vector<bool> visit;
 //vector<bool> reachable;
 
 vector<unordered_map<int,vector<int>>> R;
 
 int G[280000][50]; //G[u][v]
-string idCom[280000];
-string idLF[280000];
-bool *visit=new bool[280000];
-bool *reachable=new bool[280000];
-int *out=new int[8];
-int *currentJs=new int[3000];
+string *idCom;
+string *idLF;
+bool *visit;
+bool *reachable;
+int out[8];
+int currentJs[3000];
 
 int res3[3*500000];
 int res4[4*500000];
@@ -47,82 +48,20 @@ int res6[6*2000000];
 int res7[7*3000000];
 int *results[8]={0,0,0,res3,res4,res5,res6,res7};
 
-int *inDegrees=new int[280000];
-int *outDegrees=new int[280000];
+int *inDegrees;
+int *outDegrees;
 
-void loadData();
+// void loadData();
 
-void constructGraph();
-void quickSort(int arr[],int low,int high);
-void simplifyAndSort(int deg[],bool sorting);
-void constructReverseIndex();
+// void constructGraph();
+// void quickSort(int arr[],int low,int high);
+// void simplifyAndSort(int deg[],bool sorting);
+// void constructReverseIndex();
 
-void solve();
-int binarySearch(int arr[], int target);
-void solveDFS(int head,int cur,int depth,int out[]);
-void saveData();
-
-// class Solution{
-// public:
-//     Solution(string testFile, string resultFile);
-//     void loadData();
-
-//     void constructGraph();
-//     void quickSort(int arr[],int low,int high);
-//     void simplifyAndSort(int deg[],bool sorting);
-//     void constructReverseIndex();
-
-//     void solve();
-//     int binarySearch(int arr[], int target);
-//     void solveDFS(int head,int cur,int depth,int out[]);
-//     void saveData();
-
-
-// private:
-//     string testFile;
-//     string resultFile;
-//     //vector<vector<int>> results[8];  //按环的长度从3到7储存结果
-//     int nodeCnt=0;   //记录节点数
-//     int ringCnt=0;   //记录总环数
-
-//     //vector<vector<int>> G;          //邻接矩阵
-//     unordered_map<int,int> idHash;  //sorted id to 0...n
-//     //vector<string> idsCom; //0...n to sorted id
-//     //vector<string> idsLF; //0...n to sorted id
-//     vector<int> inputs; //u-v pairs
-//     //vector<bool> visit;
-//     //vector<bool> reachable;
-
-//     vector<unordered_map<int,vector<int>>> R;
-
-//     int G[280000][50]; //G[u][v]
-//     string idCom[280000];
-//     string idLF[280000];
-//     bool visit[280000];
-//     bool reachable[280000];
-
-//     int res3[3*500000];
-//     int res4[4*500000];
-//     int res5[5*1000000];
-//     int res6[6*2000000];
-//     int res7[7*3000000];
-//     int *results[8]={0,0,0,res3,res4,res5,res6,res7};
-
-
-//     int threadNum;      //线程数
-//     bool openThread;     //根据图的边数和节点数决定是否开启线程
-
-// public:
-//     //vector<int> inDegrees;
-//     //vector<int> outDegrees;
-//     int inDegrees[280000];
-//     int outDegrees[280000];
-// };
-
-// //初始化
-// Solution::Solution(string testF, string resultF):testFile(testF),resultFile(resultF),threadNum(4),openThread(false){
-//     cout<<"coming";
-// }
+// void solve();
+// int binarySearch(int arr[], int target);
+// void solveDFS(int head,int cur,int depth,int out[]);
+// void saveData();
 
 void loadData()
 {
@@ -137,7 +76,7 @@ void loadData()
 #ifdef TEST
     cout<<"loading data ..."<<endl;
 #endif
-    inputs.reserve(280000);
+    //inputs.reserve(280000);
     for(char *p=mbuf;*p&&p-mbuf<len;p++)
     {
         while(*p!=',')
@@ -146,8 +85,8 @@ void loadData()
             p++;
         }
         while(*(++p)!=',') id2=id2*10+(*p-'0');
-        inputs.push_back(id1);
-        inputs.push_back(id2);
+        inputs[++inputs[0]]=id1;
+        inputs[++inputs[0]]=id2;
         //cout<<id1<<" ";
         id1=0;id2=0;
         while(*(++p)!='\n');
@@ -160,17 +99,26 @@ void loadData()
 
 void constructGraph()
 {
-        auto tmp=inputs;
-        sort(tmp.begin(),tmp.end());
-        tmp.erase(unique(tmp.begin(),tmp.end()),tmp.end());
-        nodeCnt=0;
-        for(int &x:tmp){
-            idCom[nodeCnt]=(to_string(x)+',');
-            idLF[nodeCnt]=(to_string(x)+'\n');
-            idHash[x]=nodeCnt++;
+        int n=inputs[0];
+        int *tmp=new int[n];
+        memcpy(tmp,inputs+1,n*sizeof(int));
+        sort(tmp,tmp+n);
+        //unique去重，返回一个迭代器，指向不重复序列的最后一个元素的下一个元素
+        nodeCnt=(int)(unique(tmp,tmp+n)-tmp);
+        idCom=new string[nodeCnt];
+        idLF=new string[nodeCnt];
+        visit=new bool[nodeCnt];
+        reachable=new bool[nodeCnt];
+        inDegrees=new int[nodeCnt];
+        outDegrees=new int[nodeCnt];
+
+        for(int i=0;i<nodeCnt;i++){
+            idCom[i]=(to_string(tmp[i])+',');
+            idLF[i]=(to_string(tmp[i])+'\n');
+            idHash[tmp[i]]=i;
         }
-        int n=inputs.size();
-        for(int i=0;i<n;i+=2){
+        //int n=inputs.size();
+        for(int i=1;i<=n;i+=2){
             int u=idHash[inputs[i]],v=idHash[inputs[i+1]];
             G[u][++G[u][0]]=v;
             ++inDegrees[v];
@@ -178,7 +126,7 @@ void constructGraph()
         }
 }
 
-
+/*
 void quickSort(int arr[],int low,int high){
     int start=low;
     int end=high;
@@ -209,6 +157,7 @@ void quickSort(int arr[],int low,int high){
         quickSort(arr,end+1,high);
             
 }
+*/
 
 void simplifyAndSort(int deg[], bool sorting)
 {
@@ -232,8 +181,8 @@ void simplifyAndSort(int deg[], bool sorting)
             G[i][0]=0;
             cnt++;
         }else if(sorting){
-            //sort(G[i]+1,G[i]+G[i][0]+1);
-            quickSort(G[i],1,G[i][0]);
+            sort(G[i]+1,G[i]+G[i][0]+1);
+            //quickSort(G[i],1,G[i][0]);
         }
     }
 #ifdef TEST
@@ -266,6 +215,7 @@ void constructReverseIndex()
     }
 }
 
+/*
 int binarySearch(int arr[], int target)
 {
     int start = 1, end = arr[0];
@@ -279,6 +229,7 @@ int binarySearch(int arr[], int target)
 	}
     return end + 1;
 }
+*/
 
 
 void solveDFS(int head,int cur,int depth,int out[])
@@ -385,7 +336,7 @@ void saveData()
 #endif
     //结果转成字符串
     string resultStr(to_string(ringCnt)+'\n');
-    resultStr.reserve(1000000);
+    resultStr.reserve(100000);
     //resultStr+=to_string(ringCnt);
     //resultStr+="\n";
     for(int l=DEPTH_LOW;l<=DEPTH_HIGH;l++)
@@ -435,8 +386,8 @@ int main(int argc, char *argv[])
     testFile="./data/test_data.txt";
     resultFile="./projects/student/result.txt";
 #else
-    testFile="/data/test_data.txt";
-    resultFile="/projects/student/result.txt";
+    testFile="./data/test_data.txt";
+    resultFile="./projects/student/result.txt";
 #endif
     //Solution solution(testFile,resultFile);
     loadData();
