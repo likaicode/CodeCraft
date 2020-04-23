@@ -10,6 +10,7 @@ using namespace std;
 
 #define DEPTH_LOW 3
 #define DEPTH_HIGH 7
+#define THREAD_NUM 8
 
 
 //类名：Solution
@@ -19,27 +20,30 @@ using namespace std;
 string testFile;
 string resultFile;
 //vector<vector<int>> results[8];  //按环的长度从3到7储存结果
-int nodeCnt=0;   //记录节点数
+//int nodeCnt=0;   //记录节点数
+int maxId=0;      //记录节点最大序号
 int ringCnt=0;   //记录总环数
 
 //vector<vector<int>> G;          //邻接矩阵
-unordered_map<int,int> idHash;  //sorted id to 0...n
+//unordered_map<int,int> idHash;  //sorted id to 0...n
 //vector<string> idsCom; //0...n to sorted id
 //vector<string> idsLF; //0...n to sorted id
 //vector<int> inputs; //u-v pairs
-int inputs[560001];
 //vector<bool> visit;
 //vector<bool> reachable;
 
-vector<unordered_map<int,vector<int>>> R;
+//vector<unordered_map<int,vector<int>>> R;
 
-int G[280000][50]; //G[u][v]
-string *idCom;
-string *idLF;
-bool *visit;
-bool *reachable;
+int inputs[560001];
+int G[280000][50];    //G[u][v]
+int GInv[280000][50]; //G[v][u]
+string idCom[280000];
+string idLF[280000];
+//int queue[50000];
+bool visit[280000];
+bool reachable[280000];
 int out[8];
-int currentJs[3000];
+int current[125000];  //3+4中前3层反序遍历到的结果
 
 int res3[3*500000];
 int res4[4*500000];
@@ -48,8 +52,8 @@ int res6[6*2000000];
 int res7[7*3000000];
 int *results[8]={0,0,0,res3,res4,res5,res6,res7};
 
-int *inDegrees;
-int *outDegrees;
+//int inDegrees[280000];
+//int outDegrees[280000];
 
 // void loadData();
 
@@ -76,7 +80,6 @@ void loadData()
 #ifdef TEST
     cout<<"loading data ..."<<endl;
 #endif
-    //inputs.reserve(280000);
     for(char *p=mbuf;p-mbuf<len;p++)
     {
         while(*p!=',')
@@ -85,12 +88,27 @@ void loadData()
             p++;
         }
         while(*(++p)!=',') id2=id2*10+(*p-'0');
-        inputs[++inputs[0]]=id1;
-        inputs[++inputs[0]]=id2;
+        if(maxId<id1) maxId=id1;
+        if(maxId<id2) maxId=id2;
+        //maxId=max(maxId,max(id1,id2));
+        G[id1][++G[id1][0]]=id2;
+        GInv[id2][++GInv[id2][0]]=id1;
+        if(idCom[id1].empty()){
+            idCom[id1]=(to_string(id1)+',');
+            idLF[id1]=(to_string(id1)+'\n');
+        }
+        if(idCom[id2].empty()){
+            idCom[id2]=(to_string(id2)+',');
+            idLF[id2]=(to_string(id2)+'\n');
+        }
+        //++inDegrees[id2];
+        //++outDegrees[id1];
+        //inputs[++inputs[0]]=id1;
+        //inputs[++inputs[0]]=id2;
         //cout<<id1<<" ";
         id1=0;id2=0;
-        p=(char*)memchr(p, '\n', 1000);
-        //while(*(++p)!='\n');
+        //p=(char*)memchr(p, '\n', 1000);
+        while(*(++p)!='\n');
     }
     munmap(mbuf,len);
 #ifdef TEST
@@ -98,20 +116,21 @@ void loadData()
 #endif
 }
 
+/*
 void constructGraph()
 {
         int n=inputs[0];
-        int *tmp=new int[n];
-        memcpy(tmp,inputs+1,n*sizeof(int));
-        sort(tmp,tmp+n);
+        //int *tmp=new int[n];
+        //memcpy(tmp,inputs+1,n*sizeof(int));
+        //sort(tmp,tmp+n);
         //unique去重，返回一个迭代器，指向不重复序列的最后一个元素的下一个元素
-        nodeCnt=unique(tmp,tmp+n)-tmp;
-        idCom=new string[nodeCnt];
-        idLF=new string[nodeCnt];
-        visit=new bool[nodeCnt];
-        reachable=new bool[nodeCnt];
-        inDegrees=new int[nodeCnt];
-        outDegrees=new int[nodeCnt];
+        //nodeCnt=unique(tmp,tmp+n)-tmp;
+        //idCom=new string[nodeCnt];
+        //idLF=new string[nodeCnt];
+        // visit=new bool[nodeCnt];
+        // reachable=new bool[nodeCnt];
+        // inDegrees=new int[nodeCnt];
+        // outDegrees=new int[nodeCnt];
 
         for(int i=0;i<nodeCnt;i++){
             idCom[i]=(to_string(tmp[i])+',');
@@ -126,6 +145,7 @@ void constructGraph()
             ++outDegrees[u];
         }
 }
+*/
 
 /*
 void quickSort(int arr[],int low,int high){
@@ -160,47 +180,51 @@ void quickSort(int arr[],int low,int high){
 }
 */
 
-void simplifyAndSort(int deg[], bool sorting)
+void simplifyAndSort()
 {
-    int *q=new int[50000];
-    q[0]=2,q[1]=2;
+    //q[0]=2,q[1]=2;
     //queue<int> q;
-    for(int i=0;i<nodeCnt;i++){
-        if(deg[i]==0)
-            q[q[1]++]=i;
+    for(int i=0;i<=maxId;i++){
+        if(G[i][0]&&GInv[i][0]){
+            sort(G[i]+1,G[i]+G[i][0]+1);
+            continue;
+        }
+        if(G[i][0]) G[i][0]=0;
+        if(GInv[i][0]) GInv[i][0]=0;
+            //q[q[1]++]=i;
             //q.push(i);
     }
-    while(q[0]<q[1]){
-        //int u=q.front(); q.pop();
-        int u=q[q[0]++];
-        int n=G[u][0];
-        for(int i=1;i<=n;i++) {
-            if(--deg[G[u][i]]==0)  //遍历入度为0的节点的邻接表并删除入度为1的节点的邻接表
-                q[q[1]++]=G[u][i];
-                //q.push(G[u][i]);
-        }
-    }
-
-#ifdef TEST
-    int cnt=0;
-#endif
-    for(int i=0;i<nodeCnt;i++){
-        if(deg[i]==0){
-            G[i][0]=0;
-#ifdef TEST
-            cnt++;
-#endif
-        }else if(sorting){
-            sort(G[i]+1,G[i]+G[i][0]+1);
-            //quickSort(G[i],1,G[i][0]);
-        }
-    }
-#ifdef TEST
-        cout<<cnt<<" nodes eliminated"<<endl;
-#endif
 }
+    // while(q[0]<q[1]){
+    //     //int u=q.front(); q.pop();
+    //     int u=q[q[0]++];
+    //     int n=G[u][0];
+    //     for(int i=1;i<=n;i++) {
+    //         if(--deg[G[u][i]]==0)  //遍历入度为0的节点的邻接表并删除入度为1的节点的邻接表
+    //             q[q[1]++]=G[u][i];
+    //             //q.push(G[u][i]);
+    //     }
+    // }
 
+// #ifdef TEST
+//     int cnt=0;
+// #endif
+//     for(int i=0;i<nodeCnt;i++){
+//         if(deg[i]==0){
+//             G[i][0]=0;
+// #ifdef TEST
+//             cnt++;
+// #endif
+//         }else if(sorting){
+//             sort(G[i]+1,G[i]+G[i][0]+1);
+//             //quickSort(G[i],1,G[i][0]);
+//         }
+//     }
+// #ifdef TEST
+//         cout<<cnt<<" nodes eliminated"<<endl;
+// #endif
 
+/*
 void constructReverseIndex()
 {
     //vector<unordered_map<int,vector<int>>> R;
@@ -209,21 +233,27 @@ void constructReverseIndex()
     R.resize(nodeCnt);
     for(int j=0;j<nodeCnt;j++){
         auto &arr=G[j];
-        for(int k=1;k<=arr[0];k++){//对i的所有邻接点k进行遍历 
-            auto &arrk=G[arr[k]];
-            for(int i=1;i<=arrk[0];i++){//对k的所有邻接点j进行遍历
-                if(j>arrk[i]&&arr[k]>arrk[i]) R[arrk[i]][j].push_back(arr[k]);//节点j能够通过节点k访问到节点i i!=j
+        int arrSize=arr[0];
+        for(int k=1;k<=arrSize;k++){//对i的所有邻接点k进行遍历 
+            int &arrValue=arr[k];
+            auto &arrk=G[arrValue];
+            int arrkSize=arrk[0];
+            for(int i=1;i<=arrkSize;i++){//对k的所有邻接点j进行遍历
+                int &arrkValue=arrk[i];
+                if(j>arrkValue&&arrValue>arrkValue) R[arrkValue][j].push_back(arrValue);//节点j能够通过节点k访问到节点i i!=j
             }
         }
     }
     for(int i=0;i<nodeCnt;i++){
         for(auto &x:R[i]){
-            if(x.second.size()>1){
-                sort(x.second.begin(),x.second.end());
+            auto &xVec=x.second;
+            if(xVec.size()>1){
+                sort(xVec.begin(),xVec.end());
             }
         }
     }
 }
+*/
 
 /*
 int binarySearch(int arr[], int target)
@@ -297,17 +327,52 @@ void solveDFS(int head,int cur,int depth,int out[])
 void solve()
 {
     //solveDFS的外循环，可以用多线程来并行优化
-    ringCnt=0;
-    //visit=vector<bool>(nodeCnt,false);
-    //vector<int> out;
-    //int out[8];
-    //reachable=vector<bool>(nodeCnt,false);
-    //int currentJs[3000];
-    //vector<int> currentJs(nodeCnt);
     //if(nodeCnt>20000) openThread=true;    //当图的节点比较多时，才会采用多线程dfs
-
     //多线程dfs方法：将nodeCnt个节点分为threadNum块，开启threadNum个线程并在每个线程中搜索指定范围内的节点是否成环，G和R是线程共享的
-    //每个线程访问自己的reachable和currentJs，
+    //每个线程访问自己的reachable和currentJs
+
+    for(int i=0;i<=maxId;i++){
+        if(G[i][0]){
+            int &m1=GInv[i][0];
+            for(int i1=1;i1<=m1;i1++){  //反序遍历第1层
+                int &v1=GInv[i][i1];
+                reachable[v1]=true;
+                current[++current[0]]=v1;
+                int &m2=GInv[v1][0];
+                for(int i2=1;i2<=m2;i2++){  //反序遍历第2层
+                    int &v2=GInv[v1][i2];
+                    reachable[v2]=true;
+                    current[++current[0]]=v2;
+                    int &m3=GInv[v2][0];
+                    for(int i3=1;i3<=m3;i3++){  //反序遍历第3层
+                        int &v3=GInv[v2][i3];
+                        reachable[v3]=true;
+                        current[++current[0]]=v3;
+                    }
+                }
+            }
+            //正向4层dfs遍历
+            out[++out[0]]=i;
+            visit[i]=true;
+            int &n1=G[i][0];
+            for(int i1=1;i1<=n1;i1++){
+                int &u1=G[i][i1];
+                
+            }
+
+
+            //将反序表遍历的标记清除
+            int m=current[0];
+            for(int i=1;i<=m;i++){
+                reachable[current[i]]=false;
+            }
+            current[0]=0;
+        }
+    }
+
+
+
+/*
     for(int i=0;i<nodeCnt;++i){
 #ifdef TEST
         if(i%100==0) cout<<i<<"/"<<nodeCnt<<endl;
@@ -328,11 +393,13 @@ void solve()
                 // }
             }
             solveDFS(i,i,1,out);
-            for(int j=1;j<=currentJs[0];j++)
+            int currentJsSize=currentJs[0];
+            for(int j=1;j<=currentJsSize;j++)
                 reachable[currentJs[j]]=false;
             currentJs[0]=0;
         }
     }
+*/
 #ifdef TEST
     cout<<"total rings: "<<ringCnt<<endl;
 #endif
@@ -405,10 +472,11 @@ int main(int argc, char *argv[])
     loadData();
 
     constructGraph();
-    simplifyAndSort(inDegrees,false);
-    simplifyAndSort(outDegrees,true);
+    simplifyAndSort();
+    //simplifyAndSort(inDegrees,false);
+    //simplifyAndSort(outDegrees,true);
 
-    constructReverseIndex();
+    //constructReverseIndex();
 
     solve();
 
