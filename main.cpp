@@ -27,7 +27,7 @@ unordered_map<int,int> idHash;  //sorted id to 0...n
 //vector<string> idsCom; //0...n to sorted id
 //vector<string> idsLF; //0...n to sorted id
 //vector<int> inputs; //u-v pairs
-int inputs[560000];
+int inputs[560001];
 //vector<bool> visit;
 //vector<bool> reachable;
 
@@ -77,7 +77,7 @@ void loadData()
     cout<<"loading data ..."<<endl;
 #endif
     //inputs.reserve(280000);
-    for(char *p=mbuf;*p&&p-mbuf<len;p++)
+    for(char *p=mbuf;p-mbuf<len;p++)
     {
         while(*p!=',')
         {
@@ -89,7 +89,8 @@ void loadData()
         inputs[++inputs[0]]=id2;
         //cout<<id1<<" ";
         id1=0;id2=0;
-        while(*(++p)!='\n');
+        p=(char*)memchr(p, '\n', 1000);
+        //while(*(++p)!='\n');
     }
     munmap(mbuf,len);
 #ifdef TEST
@@ -104,7 +105,7 @@ void constructGraph()
         memcpy(tmp,inputs+1,n*sizeof(int));
         sort(tmp,tmp+n);
         //unique去重，返回一个迭代器，指向不重复序列的最后一个元素的下一个元素
-        nodeCnt=(int)(unique(tmp,tmp+n)-tmp);
+        nodeCnt=unique(tmp,tmp+n)-tmp;
         idCom=new string[nodeCnt];
         idLF=new string[nodeCnt];
         visit=new bool[nodeCnt];
@@ -161,25 +162,34 @@ void quickSort(int arr[],int low,int high){
 
 void simplifyAndSort(int deg[], bool sorting)
 {
-    queue<int> q;
+    int *q=new int[50000];
+    q[0]=2,q[1]=2;
+    //queue<int> q;
     for(int i=0;i<nodeCnt;i++){
         if(deg[i]==0)
-            q.push(i);
+            q[q[1]++]=i;
+            //q.push(i);
     }
-    while(!q.empty()){
-        int u=q.front(); q.pop();
+    while(q[0]<q[1]){
+        //int u=q.front(); q.pop();
+        int u=q[q[0]++];
         int n=G[u][0];
         for(int i=1;i<=n;i++) {
             if(--deg[G[u][i]]==0)  //遍历入度为0的节点的邻接表并删除入度为1的节点的邻接表
-                q.push(G[u][i]);
+                q[q[1]++]=G[u][i];
+                //q.push(G[u][i]);
         }
     }
 
+#ifdef TEST
     int cnt=0;
+#endif
     for(int i=0;i<nodeCnt;i++){
         if(deg[i]==0){
             G[i][0]=0;
+#ifdef TEST
             cnt++;
+#endif
         }else if(sorting){
             sort(G[i]+1,G[i]+G[i][0]+1);
             //quickSort(G[i],1,G[i][0]);
@@ -355,7 +365,9 @@ void saveData()
     //mmap写到文件
     int fd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
     int len=resultStr.length();
-    ftruncate(fd,len);
+    lseek(fd, len - 1, SEEK_SET);
+    write(fd, " ", 1);
+    //ftruncate(fd,len);
     int strLen=1024*1024;
     char* pbuf=NULL;
     int cnt=len/strLen;
@@ -368,7 +380,7 @@ void saveData()
         memcpy(pbuf,resultStr.substr(i*strLen,strLen).c_str(),strLen);
         munmap(pbuf,strLen);
     }
-    pbuf=(char*) mmap(NULL,mod,PROT_WRITE,MAP_SHARED,fd,cnt*strLen);
+    pbuf=(char*) mmap(NULL,mod,PROT_READ|PROT_WRITE,MAP_SHARED,fd,cnt*strLen);
     memcpy(pbuf,resultStr.substr(cnt*strLen,mod).c_str(),mod);
     munmap(pbuf,mod);
 
