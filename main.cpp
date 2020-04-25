@@ -40,21 +40,23 @@ char resultData[300000000];
 //int queue[50000];
 bool visit[threadNum][280000];
 bool reachable[threadNum][280000];
+bool reachableInv[threadNum][280000];
 //int out[threadNum][8];
-int current[threadNum][125000];  //3+4中前3层反序遍历到的结果
+int reachables[threadNum][125000];  //3+4中前3层反序遍历到的结果
+int reachableInvs[threadNum][125000];
 
-int res3[threadNum][3*200000];
-int res4[threadNum][4*200000];
-int res5[threadNum][5*400000];
-int res6[threadNum][6*800000];
-int res7[threadNum][7*1000000];
+int res3[threadNum][3*500000];
+int res4[threadNum][4*500000];
+int res5[threadNum][5*1000000];
+int res6[threadNum][6*2000000];
+int res7[threadNum][7*3000000];
 int *results[threadNum][8];
 
 //int inDegrees[280000];
 //int outDegrees[280000];
 struct ThreadInfo{  //每个线程的左右边界
-    int l;
-    int r;
+    //int l;
+    //int r;
     int threadCnt;
 };
 
@@ -149,26 +151,26 @@ void loadData()
 
 void simplifyAndSort()
 {
-    //对id号进行分块，4线程为例，总结点数除以20(4*5)得到perCnt，第0个线程从0到perCnt倒序遍历，第1个线程从perCnt到2×perCnt，第2个从2×perCnt到4×perCnt，第3个负责剩下的
 #ifdef TEST
     cout<<"sorting..."<<endl;
 #endif
+    //对id号进行分块，4线程为例，总结点数除以20(4*5)得到perCnt，第0个线程从0到perCnt倒序遍历，第1个线程从perCnt到2×perCnt，第2个从2×perCnt到4×perCnt，第3个负责剩下的
     //int perCnt=nodeCnt/(threadNum*(threadNum+1));
-    int perCnt=nodeCnt/threadNum;
-    int nodetmp=0;
-    int tc=0;
+    //int perCnt=nodeCnt/threadNum;
+    //int nodetmp=0;
+    //int tc=0;
     for(int i=0;i<=maxId;i++){
         if(G[i][0]&&GInv[i][0]){
-            ++nodetmp;
-            if(nodetmp==1){
-                infos[0].l=i-1;
-                ++tc;
-            }
-            else if(nodetmp==tc*perCnt){
-                infos[tc-1].r=i; //左开右闭
-                infos[tc].l=i;
-                ++tc;
-            }
+            // ++nodetmp;
+            // if(nodetmp==1){
+            //     infos[0].l=i-1;
+            //     ++tc;
+            // }
+            // else if(nodetmp==tc*perCnt){
+            //     infos[tc-1].r=i; //左开右闭
+            //     infos[tc].l=i;
+            //     ++tc;
+            // }
 
             sort(G[i]+1,G[i]+G[i][0]+1,greater<int>());
             sort(GInv[i]+1,GInv[i]+GInv[i][0]+1);
@@ -179,7 +181,7 @@ void simplifyAndSort()
             //q[q[1]++]=i;
             //q.push(i);
     }
-    infos[tc-1].r=maxId;
+    //infos[tc-1].r=maxId;
 #ifdef TEST
     cout<<"done!"<<endl;
 #endif
@@ -193,153 +195,145 @@ void *run(void *threadInfo)
     //每个线程访问自己的reachable和currentJs
 
     ThreadInfo* info = (ThreadInfo*)threadInfo;
-    int l=info->l, r=info->r, tc=info->threadCnt;
+    //int l=info->l, r=info->r;
+    int tc=info->threadCnt;
     int out[8];
     out[0]=0;
 #ifdef TEST
     //cout<<"thread"<<tc<<"in"<<endl;
 #endif
-    for(int i=r;i>l;i--){
+    for(int i=maxId-maxId%threadNum+tc;i>=0;i-=threadNum){
         if(G[i][0]){
-            int &m1=GInv[i][0];
-            for(int i1=m1;i1>0;i1--){  //反序遍历第1层
+            for(int i1=GInv[i][0];i1>0;i1--){  //反序遍历第1层
                 int &v1=GInv[i][i1];
                 if(v1<=i) break;
-                reachable[tc][v1]=true;
-                current[tc][++current[tc][0]]=v1;
-                int &m2=GInv[v1][0];
-                for(int i2=m2;i2>0;i2--){  //反序遍历第2层
+                reachable[tc][v1]=true;  //正向一层可到达
+                reachableInv[tc][v1]=true;
+                reachables[tc][++reachables[tc][0]]=v1;
+                reachableInvs[tc][++reachableInvs[tc][0]]=v1;
+                for(int i2=GInv[v1][0];i2>0;i2--){  //反序遍历第2层
                     int &v2=GInv[v1][i2];
                     if(v2<=i) break;
-                    reachable[tc][v2]=true;
-                    current[tc][++current[tc][0]]=v2;
-                    int &m3=GInv[v2][0];
-                    for(int i3=m3;i3>0;i3--){  //反序遍历第3层
+                    reachableInv[tc][v2]=true;
+                    reachableInvs[tc][++reachableInvs[tc][0]]=v2;
+                    for(int i3=GInv[v2][0];i3>0;i3--){  //反序遍历第3层
                         int &v3=GInv[v2][i3];
                         if(v3<=i) break;
-                        reachable[tc][v3]=true;
-                        current[tc][++current[tc][0]]=v3;
+                        reachableInv[tc][v3]=true;
+                        reachableInvs[tc][++reachableInvs[tc][0]]=v3;
                     }
                 }
             }
             //正向4层dfs遍历
             out[++out[0]]=i;
             visit[tc][i]=true;
-            int &n1=G[i][0];
-            //int i1=lower_bound(G[i]+1,G[i]+n1+1,i)-(G[i]+1);
-            for(int i1=1;i1<=n1;i1++){  //查找，out的第0个元素为环的长度，第1个元素为始节点，从第2个开始的节点倒序存储
-                int &u1=G[i][i1];
-                if(u1<=i) break;
-                out[++out[0]]=u1;
-                visit[tc][u1]=true;
-                int &n2=G[u1][0];
-                //int i2=lower_bound(G[u1]+1,G[u1]+n2+1,i)-(G[u1]+1);
-                for(int i2=1;i2<=n2;i2++){
-                    int &u2=G[u1][i2];
-                    if(u2<=i) break;
-                    out[++out[0]]=u2;
-                    visit[tc][u2]=true;
-                    int &n3=G[u2][0];
-                    //int i3=lower_bound(G[u2]+1,G[u2]+n3+1,i)-(G[u2]+1);
-                    for(int i3=1;i3<=n3;i3++){
-                        int &u3=G[u2][i3];
-                        if(u3<i) break;
-                        if(u3==i){
-                            results[tc][3][0]+=3;  //检测到长度为3的环
-                            int n=results[tc][3][0];
-                            for(int k=1;k<=3;k++){
-                                results[tc][3][n++]=out[k];
+            for(int i1=1;i1<=G[i][0];i1++)  //查找，out的第0个元素为环的长度，第1个元素为始节点，从第2个开始的节点倒序存储
+            {  
+                int &u2=G[i][i1];  //环中的第二个点
+                if(u2<=i) break;
+                out[++out[0]]=u2;
+                visit[tc][u2]=true;
+                for(int i2=1;i2<=G[u2][0];i2++)
+                {
+                    int &u3=G[u2][i2];
+                    if(u3<=i) break;
+                    out[++out[0]]=u3;
+                    visit[tc][u3]=true;
+                    if(reachable[u3])
+                    {
+                        results[tc][3][0]+=3;  //检测到长度为3的环
+                        int n=results[tc][3][0];
+                        for(int k=1;k<=3;k++)
+                        {
+                            results[tc][3][n++]=out[k];
+                        }
+                        ++ringCnt[tc];
+                    }
+                    for(int i3=1;i3<=G[u3][0];i3++)
+                    {
+                        int &u4=G[u3][i3];
+                        if(u4<i) break;
+                        if(visit[tc][u4]) continue;
+                        out[++out[0]]=u4;
+                        visit[tc][u4]=true;
+                        if(reachable[u4])
+                        {
+                            results[tc][4][0]+=4;  //检测到长度为4的环
+                            int n=results[tc][4][0];
+                            for(int k=1;k<=4;k++)
+                            {
+                                results[tc][4][n++]=out[k];
                             }
                             ++ringCnt[tc];
-                            break;
                         }
-                        if(visit[tc][u3]) continue;
-                        out[++out[0]]=u3;
-                        visit[tc][u3]=true;
-                        int &n4=G[u3][0];
-                        //int i4=lower_bound(G[u3]+1,G[u3]+n4+1,i)-(G[u3]+1);
-                        for(int i4=1;i4<=n4;i4++){
-                            int &u4=G[u3][i4];
-                            if(u4<i) break;
-                            if(u4==i){
-                                results[tc][4][0]+=4;  //检测到长度为4的环
-                                int n=results[tc][4][0];
-                                for(int k=1;k<=4;k++){
-                                    results[tc][4][n++]=out[k];
+                        for(int i4=1;i4<=G[u4][0];i4++)
+                        {
+                            int &u5=G[u4][i4];
+                            if(u5<i) break;
+                            if(visit[tc][u5]||(!reachableInv[tc][u5])) continue;
+                            out[++out[0]]=u5;
+                            visit[tc][u5]=true;
+                            if(reachable[u5])
+                            {
+                                results[tc][5][0]+=5;  //检测到长度为5的环
+                                int n=results[tc][5][0];
+                                for(int k=1;k<=5;k++)
+                                {
+                                    results[tc][5][n++]=out[k];
                                 }
                                 ++ringCnt[tc];
-                                break;
                             }
-                            if(visit[tc][u4]||(!reachable[tc][u4])) continue;
-                            out[++out[0]]=u4;
-                            visit[tc][u4]=true;
-                            //只有在3层内可到达i的节点才能继续遍历
-                            int &n5=G[u4][0];
-                            //int i5=lower_bound(G[u4]+1,G[u4]+n5+1,i)-(G[u4]+1);
-                            for(int i5=1;i5<=n5;i5++){
-                                int &u5=G[u4][i5];
-                                if(u5<i) break;
-                                if(u5==i){
-                                    results[tc][5][0]+=5;  //检测到长度为5的环
-                                    int n=results[tc][5][0];
-                                    for(int k=1;k<=5;k++){
-                                        results[tc][5][n++]=out[k];
+                            for(int i5=1;i5<=G[u5][0];i5++)
+                            {
+                                int &u6=G[u5][i5];
+                                if(u6<i) break;
+                                if(visit[tc][u6]||(!reachableInv[tc][u6])) continue;
+                                out[++out[0]]=u6;
+                                visit[tc][u6]=true;
+                                if(reachable[u6])
+                                {
+                                    results[tc][6][0]+=6;  //检测到长度为6的环
+                                    int n=results[tc][6][0];
+                                    for(int k=1;k<=6;k++)
+                                    {
+                                        results[tc][6][n++]=out[k];
                                     }
                                     ++ringCnt[tc];
-                                    break;
                                 }
-                                if(visit[tc][u5]||(!reachable[tc][u5])) continue;
-                                out[++out[0]]=u5;
-                                visit[tc][u5]=true;
-                                int &n6=G[u5][0];
-                                //int i6=lower_bound(G[u5]+1,G[u5]+n6+1,i)-(G[u5]+1);
-                                for(int i6=1;i6<=n6;i6++){
-                                    int &u6=G[u5][i6];
-                                    if(u6<i) break;
-                                    if(u6==i){
-                                        results[tc][6][0]+=6;  //检测到长度为6的环
-                                        int n=results[tc][6][0];
-                                        for(int k=1;k<=6;k++){
-                                            results[tc][6][n++]=out[k];
+                                for(int i6=1;i6<=G[u6][0];i6++)
+                                {
+                                    int &u7=G[u6][i6];
+                                    if(u7<i) break;
+                                    if(visit[tc][u7]||(!reachableInv[tc][u7])) continue;
+                                    out[++out[0]]=u7;
+                                    visit[tc][u7]=true;
+                                    if(reachable[u7])
+                                    {
+                                        results[tc][7][0]+=7;  //检测到长度为6的环
+                                        int n=results[tc][7][0];
+                                        for(int k=1;k<=7;k++)
+                                        {
+                                            results[tc][7][n++]=out[k];
                                         }
                                         ++ringCnt[tc];
-                                        break;
-                                    }
-                                    if(visit[tc][u6]||(!reachable[tc][u6])) continue;
-                                    out[++out[0]]=u6;
-                                    visit[tc][u6]=true;
-                                    int &n7=G[u6][0];
-                                    //int i7=lower_bound(G[u6]+1,G[u6]+n7+1,i)-(G[u6]+1);
-                                    for(int i7=1;i7<=n7;i7++){
-                                        int &u7=G[u6][i7];
-                                        if(u7<i) break;
-                                        if(u7==i){
-                                            results[tc][7][0]+=7;  //检测到长度为7的环
-                                            int n=results[tc][7][0];
-                                            for(int k=1;k<=7;k++){
-                                                results[tc][7][n++]=out[k];
-                                            }
-                                            ++ringCnt[tc];
-                                            break;
-                                        }
                                     }
                                     --out[0];
-                                    visit[tc][u6]=false;
+                                    visit[tc][u7]=false;
                                 }
                                 --out[0];
-                                visit[tc][u5]=false;
+                                visit[tc][u6]=false;
                             }
                             --out[0];
-                            visit[tc][u4]=false;
+                            visit[tc][u5]=false;
                         }
                         --out[0];
-                        visit[tc][u3]=false;
+                        visit[tc][u4]=false;
                     }
                     --out[0];
-                    visit[tc][u2]=false;
+                    visit[tc][u3]=false;
                 }
                 --out[0];
-                visit[tc][u1]=false;
+                visit[tc][u2]=false;
             }
             --out[0];
             visit[tc][i]=false;
@@ -347,11 +341,16 @@ void *run(void *threadInfo)
 
 
         //将反序表遍历的标记清除
-        int m=current[tc][0];
+        int m=reachables[tc][0];
         for(int i=1;i<=m;i++){
-            reachable[tc][current[tc][i]]=false;
+            reachable[tc][reachables[tc][i]]=false;
         }
-        current[tc][0]=0;
+        reachables[tc][0]=0;
+        int m=reachableInvs[tc][0];
+        for(int i=1;i<=m;i++){
+            reachableInv[tc][reachableInvs[tc][i]]=false;
+        }
+        reachableInvs[tc][0]=0;
     }
 
 #ifdef TEST
@@ -373,6 +372,8 @@ void solve()
         infos[i].threadCnt=i;
         pthread_create(&tids[i], NULL, run, (void *)&(infos[i]));
     }
+    //主线程充当第0个线程来计算
+
     for(int i=0;i<threadNum;i++){
         pthread_join(tids[i], NULL);
     }
@@ -383,19 +384,13 @@ void solve()
 }
 
 
-
-
 void saveData()
 {
-    //fwrite或者mmap写
+    //mmap写
 #ifdef TEST
     cout<<"saving data ..."<<endl;
 #endif
     //结果转成字符串
-    //string resultStr(to_string(ringCnt)+'\n');
-    //resultStr.reserve(100000);
-    //resultStr+=to_string(ringCnt);
-    //resultStr+="\n";
     int totalRings=0;
     for(int tc=0;tc<threadNum;tc++){
         totalRings+=ringCnt[tc];
@@ -408,8 +403,6 @@ void saveData()
     memcpy(resultData,tmp.c_str(),len);
     for(int l=lowDepth;l<=highDepth;l++)
     {
-        //sort(results[l].begin(),results[l].end());
-        //results[l][0]+=l;
         for(int tc=0;tc<threadNum;tc++){
             int n=results[tc][l][0];
             for(int i=n;i>=l;i-=l){
@@ -427,9 +420,6 @@ void saveData()
             }
         }
     }
-    // FILE *fp=fopen(resultFile.c_str(),"w+");
-    // fwrite(resultData,len,1,fp);
-    // fclose(fp);
     
     //mmap写到文件
     int fd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
