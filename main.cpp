@@ -7,11 +7,11 @@
 using namespace std;
 
 //在官网上提交作品时一定一定要把下面这句注释掉，即转换文件读取路径
-//#define TEST
+#define TEST
 
 const int lowDepth=3;
 const int highDepth=7;
-const int threadNum=4;
+const int threadNum=10;
 
 //类名：Solution
 //作用：评估金融账号是否存在循环转账
@@ -43,13 +43,12 @@ bool reachable[threadNum][280000];
 //int out[threadNum][8];
 int current[threadNum][125000];  //3+4中前3层反序遍历到的结果
 
-int res3[threadNum][3*500000];
-int res4[threadNum][4*500000];
-int res5[threadNum][5*1000000];
-int res6[threadNum][6*2000000];
-int res7[threadNum][7*3000000];
-int *results[threadNum][8]={{0,0,0,res3[0],res4[0],res5[0],res6[0],res7[0]},{0,0,0,res3[1],res4[1],res5[1],res6[1],res7[1]},\
-                            {0,0,0,res3[2],res4[2],res5[2],res6[2],res7[2]},{0,0,0,res3[3],res4[3],res5[3],res6[3],res7[3]}};
+int res3[threadNum][3*200000];
+int res4[threadNum][4*200000];
+int res5[threadNum][5*400000];
+int res6[threadNum][6*800000];
+int res7[threadNum][7*1000000];
+int *results[threadNum][8];
 
 //int inDegrees[280000];
 //int outDegrees[280000];
@@ -63,6 +62,8 @@ struct ThreadInfo{  //每个线程的左右边界
 ThreadInfo infos[threadNum];
 pthread_t tids[threadNum];
 
+char str[30];
+
 void loadData()
 {
     int fd = open(testFile.c_str(), O_RDONLY);
@@ -73,53 +74,76 @@ void loadData()
     close(fd);
     //cout<<mbuf[10]<<"."<<mbuf[11]<<mbuf[12]<<"."<<mbuf[13]<<endl;  //第11个是'\r',第12个是'\n'
     int id1=0,id2=0;
+    int diff=0;
+    char *head=NULL;
+    bool flag=true;
     //int len1=0,len2=0;
 #ifdef TEST
     cout<<"loading data ..."<<endl;
 #endif
-    for(char *p=mbuf;p-mbuf<len;p++)
+    char *p=mbuf;
+    while(*p!='\0')
     {
-        while(*p!=',')
-        {
-            id1=id1*10+(*p-'0');
-            p++;
-            //len1++;
+        head=p;
+        while(*p!='\n'){
+            if(flag&&*p==','){
+                memset(str,0,sizeof(str));
+                diff=p-head;
+                memcpy(str,head,diff);
+                id1=stoi(str);
+                //cout<<id1<<" ";
+                if(maxId<id1) maxId=id1;
+                if(idCom[id1].empty()){
+                    ++nodeCnt;
+                    str[diff]=',';
+                    idCom[id1]=str;
+                    str[diff]='\n';
+                    idLF[id1]=str;
+                    strSize[id1]=diff+1;
+                }
+                head=++p;
+                flag=false;
+            }
+            if((!flag)&&*p==','){
+                memset(str,0,sizeof(str));
+                diff=p-head;
+                memcpy(str,head,diff);
+                id2=stoi(str);
+                //cout<<id2<<" ";
+                if(maxId<id2) maxId=id2;
+                if(idCom[id2].empty()){
+                    ++nodeCnt;
+                    str[diff]=',';
+                    idCom[id2]=str;
+                    str[diff]='\n';
+                    idLF[id2]=str;
+                    strSize[id2]=diff+1;
+                }
+                ++p;
+                flag=true;
+                G[id1][++G[id1][0]]=id2;
+                GInv[id2][++GInv[id2][0]]=id1;
+            }
+            ++p;
         }
-        while(*(++p)!=','){
-            id2=id2*10+(*p-'0');
-            //len2++;
-        }
-        if(maxId<id1) maxId=id1;
-        if(maxId<id2) maxId=id2;
-        //maxId=max(maxId,max(id1,id2));
-        G[id1][++G[id1][0]]=id2;
-        GInv[id2][++GInv[id2][0]]=id1;
-        if(idCom[id1].empty()){
-            ++nodeCnt;
-            idCom[id1]=(to_string(id1)+',');
-            idLF[id1]=(to_string(id1)+'\n');
-            strSize[id1]=idCom[id1].size();
-        }
-        if(idCom[id2].empty()){
-            ++nodeCnt;
-            idCom[id2]=(to_string(id2)+',');
-            idLF[id2]=(to_string(id2)+'\n');
-            strSize[id2]=idCom[id2].size();
-        }
+        ++p;
+
         //++inDegrees[id2];
         //++outDegrees[id1];
-        //inputs[++inputs[0]]=id1;
-        //inputs[++inputs[0]]=id2;
-        //cout<<id1<<" ";
-        id1=0;id2=0;
-        //len1=0;len2=0;
-        //p=(char*)memchr(p, '\n', 1000);
-        while(*(++p)!='\n');
     }
     munmap(mbuf,len);
+
+    for(int tc=0;tc<threadNum;tc++){
+        results[tc][3]=res3[tc];
+        results[tc][4]=res4[tc];
+        results[tc][5]=res5[tc];
+        results[tc][6]=res6[tc];
+        results[tc][7]=res7[tc];
+    }
+
 #ifdef TEST
-    cout<<"total node: "<<nodeCnt<<endl;
     cout<<"done!"<<endl;
+    cout<<"total node: "<<nodeCnt<<endl;
 #endif
 }
 
@@ -129,26 +153,23 @@ void simplifyAndSort()
 #ifdef TEST
     cout<<"sorting..."<<endl;
 #endif
-    int perCnt=nodeCnt/(threadNum*(threadNum+1));
+    //int perCnt=nodeCnt/(threadNum*(threadNum+1));
+    int perCnt=nodeCnt/threadNum;
     int nodetmp=0;
+    int tc=0;
     for(int i=0;i<=maxId;i++){
         if(G[i][0]&&GInv[i][0]){
             ++nodetmp;
             if(nodetmp==1){
                 infos[0].l=i-1;
+                ++tc;
             }
-            else if(nodetmp==perCnt){
-                infos[0].r=i; //左开右闭
-                infos[1].l=i;
-                }
-            else if(nodetmp==2*perCnt){
-                infos[1].r=i;
-                infos[2].l=i;
+            else if(nodetmp==tc*perCnt){
+                infos[tc-1].r=i; //左开右闭
+                infos[tc].l=i;
+                ++tc;
             }
-            else if(nodetmp==4*perCnt){
-                infos[2].r=i;
-                infos[3].l=i;
-            }
+
             sort(G[i]+1,G[i]+G[i][0]+1,greater<int>());
             sort(GInv[i]+1,GInv[i]+GInv[i][0]+1);
             continue;
@@ -158,96 +179,11 @@ void simplifyAndSort()
             //q[q[1]++]=i;
             //q.push(i);
     }
-    infos[3].r=maxId;
+    infos[tc-1].r=maxId;
 #ifdef TEST
     cout<<"done!"<<endl;
 #endif
 }
-
-/*
-void constructReverseIndex()
-{
-    //vector<unordered_map<int,vector<int>>> R;
-    //使用R[i][j][k]来表示结点j到达结点i，中间经过结点k的路径详情，如果k不在我们已经搜索过的结点列表中，并且i是起点，那么j-k-i就是符合要求的路径的一部分。
-    //具体来说，就是提前做深度为2的搜索（保存最后一层结点的入边），在第6层时直接根据现有结果进行判断，不进入第七层。
-    R.resize(nodeCnt);
-    for(int j=0;j<nodeCnt;j++){
-        auto &arr=G[j];
-        int arrSize=arr[0];
-        for(int k=1;k<=arrSize;k++){//对i的所有邻接点k进行遍历 
-            int &arrValue=arr[k];
-            auto &arrk=G[arrValue];
-            int arrkSize=arrk[0];
-            for(int i=1;i<=arrkSize;i++){//对k的所有邻接点j进行遍历
-                int &arrkValue=arrk[i];
-                if(j>arrkValue&&arrValue>arrkValue) R[arrkValue][j].push_back(arrValue);//节点j能够通过节点k访问到节点i i!=j
-            }
-        }
-    }
-    for(int i=0;i<nodeCnt;i++){
-        for(auto &x:R[i]){
-            auto &xVec=x.second;
-            if(xVec.size()>1){
-                sort(xVec.begin(),xVec.end());
-            }
-        }
-    }
-}
-*/
-
-/*
-void solveDFS(int head,int cur,int depth,int out[])
-{
-    //递归形式的dfs
-    visit[cur]=true;
-    out[++out[0]]=cur;
-    auto &vCur=G[cur];
-    int *beg=vCur+1, *end=vCur+vCur[0]+1;
-    auto it=lower_bound(beg,end,head);
-    //int it=binarySearch(vCur,head);//查找第一个大于等于head的位置
-    //if(head==0) cout<<it<<" "<<endl;
-    //auto it=lower_bound(vCur.begin(),vCur.end(),head);
-    //handle [3,6]
-    if(it!=end && *it==head && depth>=DEPTH_LOW && depth<DEPTH_HIGH) {
-        results[depth][0]+=depth;
-        int n=results[depth][0];
-        for(int i=1;i<=out[0];i++){
-            results[depth][n++]=out[i];
-        }
-        ++ringCnt;
-    }
-
-    if(depth<DEPTH_HIGH-1){
-        for(;it!=end;++it){
-            if(!visit[*it]){
-                solveDFS(head,*it,depth+1,out);
-            }
-        }
-    }else if(reachable[cur] && depth==DEPTH_HIGH-1){ //handle [7]
-        auto &ks=R[head][cur];
-        int sz=ks.size();
-        for(int idx=0;idx<sz;++idx){
-            int k=ks[idx];
-            if(visit[k]) continue;
-            out[++out[0]]=k;
-            depth+=1;
-            results[depth][0]+=depth;
-            int n=results[depth][0];
-            for(int i=1;i<=out[0];i++){
-                results[depth][n++]=out[i];
-            }
-            depth-=1;
-            --out[0];
-            //results[depth+1].emplace_back(tmp);
-            ++ringCnt;
-        }
-    }
-    visit[cur]=false;
-    --out[0];
-
-}
-*/
-
 
 void *run(void *threadInfo)
 {
@@ -261,7 +197,7 @@ void *run(void *threadInfo)
     int out[8];
     out[0]=0;
 #ifdef TEST
-    cout<<"thread"<<tc<<"in"<<endl;
+    //cout<<"thread"<<tc<<"in"<<endl;
 #endif
     for(int i=r;i>l;i--){
         if(G[i][0]){
@@ -420,7 +356,7 @@ void *run(void *threadInfo)
 
 #ifdef TEST
     cout<<"thread"<<tc<<" rings: "<<ringCnt[tc]<<endl;
-    cout<<"thread"<<tc<<"out"<<endl;
+    //cout<<"thread"<<tc<<"out"<<endl;
 #endif
 }
 
