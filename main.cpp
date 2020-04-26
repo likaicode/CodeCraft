@@ -11,7 +11,7 @@ using namespace std;
 
 const int lowDepth=3;
 const int highDepth=7;
-const int threadNum=10;
+const int threadNum=12;
 
 //类名：Solution
 //作用：评估金融账号是否存在循环转账
@@ -83,7 +83,8 @@ struct ThreadInfo{  //每个线程的序号
 ThreadInfo infos[threadNum];
 pthread_t tids[threadNum];
 
-char str[30];
+//char str1[20];
+//char str2[20];
 
 void loadData()
 {
@@ -95,9 +96,8 @@ void loadData()
     close(fd);
     //cout<<mbuf[10]<<"."<<mbuf[11]<<mbuf[12]<<"."<<mbuf[13]<<endl;  //第11个是'\r',第12个是'\n'
     int id1=0,id2=0;
-    int diff=0;
-    char *head=NULL;
-    bool flag=true;
+    //int diff1=0,diff2=0;
+    char *root=NULL;
     //int len1=0,len2=0;
 #ifdef TEST
     cout<<"loading data ..."<<endl;
@@ -105,8 +105,37 @@ void loadData()
     char *p=mbuf;
     while(*p!='\0')
     {
-        head=p;
-        while(*p!='\n'){
+        root=p;
+        while(*p!=',') ++p;
+        string tmp1(root,p-root);
+        id1=stoi(tmp1);
+        root=++p;
+
+        while(*p!=',') ++p;
+        string tmp2(root,p-root);
+        id2=stoi(tmp2);
+        ++p;
+        while(*p!='\n') ++p;
+        ++p;
+        if(id1>50000||id2>50000) continue;
+
+        if(maxId<id1) maxId=id1;
+        if(idCom[id1].empty()){
+            //++nodeCnt;
+            idCom[id1]=tmp1+',';
+            idLF[id1]=tmp1+'\n';
+            strSize[id1]=tmp1.size()+1;
+        }
+        if(maxId<id2) maxId=id2;
+        if(idCom[id2].empty()){
+            //++nodeCnt;
+            idCom[id2]=tmp2+',';
+            idLF[id2]=tmp2+'\n';
+            strSize[id2]=tmp2.size()+1;
+        }
+        G[id1][++G[id1][0]]=id2;
+        GInv[id2][++GInv[id2][0]]=id1;
+/*
             if(flag&&*p==','){
                 memset(str,0,sizeof(str));
                 diff=p-head;
@@ -150,8 +179,7 @@ void loadData()
             ++p;
         }
         ++p;
-        //++inDegrees[id2];
-        //++outDegrees[id1];
+*/
     }
     munmap(mbuf,len);
 
@@ -177,7 +205,7 @@ void loadData()
 
 #ifdef TEST
     cout<<"done!"<<endl;
-    cout<<"total node: "<<nodeCnt<<endl;
+    //cout<<"total node: "<<nodeCnt<<endl;
 #endif
 }
 
