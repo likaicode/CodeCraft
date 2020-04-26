@@ -7,7 +7,7 @@
 using namespace std;
 
 //在官网上提交作品时一定一定要把下面这句注释掉，即转换文件读取路径
-#define TEST
+//#define TEST
 
 const int lowDepth=3;
 const int highDepth=7;
@@ -37,15 +37,17 @@ string idLF[280000];
 //const char *idLF[280000];
 int strSize[280000];
 int totalLength;
-int startId;
 char resultData[300000000];
+int outfd;
+int perCnt;
+int strLen=1024*1024;
 //int queue[50000];
 bool visit[threadNum][280000];
 bool reachable[threadNum][280000];
 bool reachableInv[threadNum][280000];
 //int out[threadNum][8];
-int reachables[threadNum][125000];  //3+4中前3层反序遍历到的结果
-int reachableInvs[threadNum][125000];
+//int reachables[threadNum][125000];  //3+4中前3层反序遍历到的结果
+//int reachableInvs[threadNum][125000];
 
 int res3[threadNum][3*200000];
 int res4[threadNum][4*200000];
@@ -70,14 +72,14 @@ int *resultOffSet[threadNum][8];
 
 //int inDegrees[280000];
 //int outDegrees[280000];
-struct ThreadInfo{  //每个线程的左右边界
-    //int l;
-    //int r;
-    int threadCnt;
-};
+// struct ThreadInfo{  //每个线程的左右边界
+//     //int l;
+//     //int r;
+//     int threadCnt;
+// };
 
 //int infoTmp[30];
-ThreadInfo infos[threadNum];
+//ThreadInfo infos[threadNum];
 pthread_t tids[threadNum];
 
 char str[30];
@@ -108,7 +110,7 @@ void loadData()
                 memset(str,0,sizeof(str));
                 diff=p-head;
                 memcpy(str,head,diff);
-                id1=stoi(str);
+                id1=atoi(str);
                 //cout<<id1<<" ";
                 if(maxId<id1) maxId=id1;
                 if(idCom[id1].empty()){
@@ -215,16 +217,16 @@ void simplifyAndSort()
 #endif
 }
 
-void *run(void *threadInfo)
+void *run(void *arg)
 {
     //solveDFS的外循环，可以用多线程来并行优化
     //if(nodeCnt>20000) openThread=true;    //当图的节点比较多时，才会采用多线程dfs
     //多线程dfs方法：将nodeCnt个节点分为threadNum块，开启threadNum个线程并在每个线程中搜索指定范围内的节点是否成环，G和R是线程共享的
     //每个线程访问自己的reachable和currentJs
-
-    ThreadInfo* info = (ThreadInfo*)threadInfo;
+    int tc=(long)arg;
+    //ThreadInfo* info = (ThreadInfo*)threadInfo;
     //int l=info->l, r=info->r;
-    int tc=info->threadCnt;
+    //int tc=info->threadCnt;
     int out[8];
     out[0]=0;
 #ifdef TEST
@@ -240,20 +242,20 @@ void *run(void *threadInfo)
                 if(v1<=i) break;
                 reachable[tc][v1]=true;  //正向一层可到达
                 reachableInv[tc][v1]=true;
-                reachables[tc][++reachables[tc][0]]=v1;
-                reachableInvs[tc][++reachableInvs[tc][0]]=v1;
+                //reachables[tc][++reachables[tc][0]]=v1;
+                //reachableInvs[tc][++reachableInvs[tc][0]]=v1;
                 for(int i2=GInv[v1][0];i2>0;i2--)
                 {  //反序遍历第2层
                     int &v2=GInv[v1][i2];
                     if(v2<=i) break;
                     reachableInv[tc][v2]=true;
-                    reachableInvs[tc][++reachableInvs[tc][0]]=v2;
+                    //reachableInvs[tc][++reachableInvs[tc][0]]=v2;
                     for(int i3=GInv[v2][0];i3>0;i3--)
                     {  //反序遍历第3层
                         int &v3=GInv[v2][i3];
                         if(v3<=i) break;
                         reachableInv[tc][v3]=true;
-                        reachableInvs[tc][++reachableInvs[tc][0]]=v3;
+                        //reachableInvs[tc][++reachableInvs[tc][0]]=v3;
                     }
                 }
             }
@@ -374,16 +376,36 @@ void *run(void *threadInfo)
 
 
         //将反序表遍历的标记清除
-        int m=reachables[tc][0];
-        for(int i=1;i<=m;i++){
-            reachable[tc][reachables[tc][i]]=false;
+        for(int i1=GInv[i][0];i1>0;i1--)
+        {  //反序遍历第1层
+            int &v1=GInv[i][i1];
+            if(v1<=i) break;
+            reachable[tc][v1]=false;  //正向一层可到达
+            reachableInv[tc][v1]=false;
+            for(int i2=GInv[v1][0];i2>0;i2--)
+            {  //反序遍历第2层
+                int &v2=GInv[v1][i2];
+                if(v2<=i) break;
+                reachableInv[tc][v2]=false;
+                for(int i3=GInv[v2][0];i3>0;i3--)
+                {  //反序遍历第3层
+                    int &v3=GInv[v2][i3];
+                    if(v3<=i) break;
+                    reachableInv[tc][v3]=false;
+                }
+            }
         }
-        reachables[tc][0]=0;
-        m=reachableInvs[tc][0];
-        for(int i=1;i<=m;i++){
-            reachableInv[tc][reachableInvs[tc][i]]=false;
-        }
-        reachableInvs[tc][0]=0;
+
+        // int m=reachables[tc][0];
+        // for(int i=1;i<=m;i++){
+        //     reachable[tc][reachables[tc][i]]=false;
+        // }
+        // reachables[tc][0]=0;
+        // m=reachableInvs[tc][0];
+        // for(int i=1;i<=m;i++){
+        //     reachableInv[tc][reachableInvs[tc][i]]=false;
+        // }
+        // reachableInvs[tc][0]=0;
     }
 
     //resultSize
@@ -424,8 +446,8 @@ void solve()
 #endif
 
     for(int i=0;i<threadNum;i++){
-        infos[i].threadCnt=i;
-        pthread_create(&tids[i], NULL, run, (void *)&(infos[i]));
+        //infos[i].threadCnt=i;
+        pthread_create(&tids[i], NULL, run, (void *)(i));
     }
     //主线程充当第0个线程来计算
 
@@ -438,12 +460,12 @@ void solve()
 #endif
 }
 
-void *runCpy(void *threadInfo)
+void *runCpy(void *arg)
 {
     //在多线程中拼接字符串
-    ThreadInfo* info = (ThreadInfo*)threadInfo;
+    //ThreadInfo* info = (ThreadInfo*)threadInfo;
     //int l=info->l, r=info->r;
-    int tc=info->threadCnt;
+    int tc=(long)arg;
     for(int l=lowDepth;l<=highDepth;l++)
     {
         //for(int k=0;k<=maxId;k++)
@@ -465,24 +487,23 @@ void *runCpy(void *threadInfo)
                 results[tc][l][0]-=l;
                 index-=l;
             }
-            // int idx=k%threadNum;  //获取id的尾号
-            // int index=results[idx][l][0];
-            // while(index>=l&&results[idx][l][index]==k)
-            // {
-            //     for(int n=0;n<l-1;n++)
-            //     {
-            //         int &sz=strSize[results[idx][l][index+n]];
-            //         memcpy(resultData+len,idCom[results[idx][l][index+n]].c_str(),sz);
-            //         len+=sz;
-            //     }
-            //     int &sz=strSize[results[idx][l][index+l-1]];
-            //     memcpy(resultData+len,idLF[results[idx][l][index+l-1]].c_str(),sz);
-            //     len+=sz;
-            //     results[idx][l][0]-=l;
-            //     index-=l;
-            // }
         }
     }
+}
+
+void *runWrite(void *arg)
+{
+    //mmap
+    int tc=(long)arg;
+    //cout<<"thread"<<tc<<endl;
+    char* pbuf=NULL;
+    int start=tc*perCnt*strLen;
+    for(int i=0;i<perCnt;i++){
+        pbuf=(char *)mmap(NULL,strLen,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,start+i*strLen);
+        memcpy(pbuf,resultData+start+i*strLen,strLen);
+        munmap(pbuf,strLen);
+    }
+    //cout<<"thread out"<<tc<<endl;
 }
 
 void saveData()
@@ -529,58 +550,64 @@ void saveData()
 
     //多线程拼接字符串结果
     for(int i=0;i<threadNum;i++){
-        pthread_create(&tids[i], NULL, runCpy, (void *)&(infos[i]));
+        pthread_create(&tids[i], NULL, runCpy, (void *)(i));
     }
     //等待结果
     for(int i=0;i<threadNum;i++){
         pthread_join(tids[i], NULL);
     }
 
-
-    // for(int l=lowDepth;l<=highDepth;l++)
-    // {
-    //     for(int k=0;k<=maxId;k++)
-    //     {
-    //         int idx=k%threadNum;  //获取id的尾号
-    //         int index=results[idx][l][0];
-    //         while(index>=l&&results[idx][l][index]==k)
-    //         {
-    //             for(int n=0;n<l-1;n++)
-    //             {
-    //                 int &sz=strSize[results[idx][l][index+n]];
-    //                 memcpy(resultData+len,idCom[results[idx][l][index+n]].c_str(),sz);
-    //                 len+=sz;
-    //             }
-    //             int &sz=strSize[results[idx][l][index+l-1]];
-    //             memcpy(resultData+len,idLF[results[idx][l][index+l-1]].c_str(),sz);
-    //             len+=sz;
-    //             results[idx][l][0]-=l;
-    //             index-=l;
-    //         }
-    //     }
-    // }
-    
-    //mmap写到文件
-    int fd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
-    //int len=resultStr.length();
-    int res=ftruncate(fd,totalLength);
-    int strLen=1024*1024;
-    char* pbuf=NULL;
+    //扩充文件大小
+    outfd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
+    int res=ftruncate(outfd,totalLength);
     int cnt=totalLength/strLen;
     int mod=totalLength%strLen;
 #ifdef TEST
     cout<<cnt<<"MB+"<<mod<<endl;
 #endif
-    for(int i=0;i<cnt;i++){
-        pbuf=(char *)mmap(NULL,strLen,PROT_READ|PROT_WRITE,MAP_SHARED,fd,i*strLen);
-        memcpy(pbuf,resultData+i*strLen,strLen);
-        munmap(pbuf,strLen);
-    }
-    pbuf=(char*) mmap(NULL,mod,PROT_READ|PROT_WRITE,MAP_SHARED,fd,cnt*strLen);
-    memcpy(pbuf,resultData+cnt*strLen,mod);
-    munmap(pbuf,mod);
 
-    close(fd);
+    int writeThreadNum=0;
+    if(cnt>12){
+        writeThreadNum=3;  //结果文件大于12M，开3个线程，第4个线程为主线程
+    }
+    //mmap写到文件
+    if(writeThreadNum==0)
+    {
+        char* pbuf=NULL;
+        for(int i=0;i<cnt;i++){
+            pbuf=(char *)mmap(NULL,strLen,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,i*strLen);
+            memcpy(pbuf,resultData+i*strLen,strLen);
+            munmap(pbuf,strLen);
+        }
+        pbuf=(char*) mmap(NULL,mod,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,cnt*strLen);
+        memcpy(pbuf,resultData+cnt*strLen,mod);
+        munmap(pbuf,mod);
+    }
+    else if(writeThreadNum==3)
+    {
+        //开threadN个mmap写线程
+        perCnt=cnt/writeThreadNum;
+        for(int i=0;i<writeThreadNum;i++){
+            pthread_create(&tids[i], NULL, runWrite, (void *)(i));
+        }
+        //主线程中处理尾部部分的写文件
+        char* pbuf=NULL;
+        int start=writeThreadNum*perCnt*strLen;
+        for(int i=0;i<cnt-3*perCnt;i++){
+            pbuf=(char *)mmap(NULL,strLen,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,start+i*strLen);
+            memcpy(pbuf,resultData+start+i*strLen,strLen);
+            munmap(pbuf,strLen);
+        }
+        pbuf=(char*) mmap(NULL,mod,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,cnt*strLen);
+        memcpy(pbuf,resultData+cnt*strLen,mod);
+        munmap(pbuf,mod);
+
+        //等待结果
+        for(int i=0;i<writeThreadNum;i++){
+            pthread_join(tids[i], NULL);
+        }
+    }
+    close(outfd);
 #ifdef TEST
     cout<<"done!"<<endl;
 #endif
@@ -593,8 +620,8 @@ int main(int argc, char *argv[])
     testFile="./data/test_data.txt";
     resultFile="./projects/student/result.txt";
 #else
-    testFile="/data/test_data.txt";
-    resultFile="/projects/student/result.txt";
+    testFile="./data/test_data.txt";
+    resultFile="./projects/student/result.txt";
 #endif
 
     loadData();
