@@ -36,6 +36,8 @@ string idLF[280000];
 //const char *idCom[280000];
 //const char *idLF[280000];
 int strSize[280000];
+int totalLength;
+int startId;
 char resultData[300000000];
 //int queue[50000];
 bool visit[threadNum][280000];
@@ -45,12 +47,26 @@ bool reachableInv[threadNum][280000];
 int reachables[threadNum][125000];  //3+4中前3层反序遍历到的结果
 int reachableInvs[threadNum][125000];
 
-int res3[threadNum][3*500000];
-int res4[threadNum][4*500000];
-int res5[threadNum][5*1000000];
-int res6[threadNum][6*2000000];
-int res7[threadNum][7*3000000];
+int res3[threadNum][3*200000];
+int res4[threadNum][4*200000];
+int res5[threadNum][5*400000];
+int res6[threadNum][6*800000];
+int res7[threadNum][7*1000000];
 int *results[threadNum][8];
+
+int resSize3[threadNum][280000];  //每个id开头的字节长度，用于计算偏移量
+int resSize4[threadNum][280000];
+int resSize5[threadNum][280000];
+int resSize6[threadNum][280000];
+int resSize7[threadNum][280000];
+int *resultSize[threadNum][8];
+
+int resOffSet3[threadNum][280000];  //memcpy拷贝时的resultData偏移量
+int resOffSet4[threadNum][280000];
+int resOffSet5[threadNum][280000];
+int resOffSet6[threadNum][280000];
+int resOffSet7[threadNum][280000];
+int *resultOffSet[threadNum][8];
 
 //int inDegrees[280000];
 //int outDegrees[280000];
@@ -141,6 +157,18 @@ void loadData()
         results[tc][5]=res5[tc];
         results[tc][6]=res6[tc];
         results[tc][7]=res7[tc];
+
+        resultSize[tc][3]=resSize3[tc];
+        resultSize[tc][4]=resSize4[tc];
+        resultSize[tc][5]=resSize5[tc];
+        resultSize[tc][6]=resSize6[tc];
+        resultSize[tc][7]=resSize7[tc];
+
+        resultOffSet[tc][3]=resOffSet3[tc];
+        resultOffSet[tc][4]=resOffSet4[tc];
+        resultOffSet[tc][5]=resOffSet5[tc];
+        resultOffSet[tc][6]=resOffSet6[tc];
+        resultOffSet[tc][7]=resOffSet7[tc];
     }
 
 #ifdef TEST
@@ -202,21 +230,26 @@ void *run(void *threadInfo)
 #ifdef TEST
     //cout<<"thread"<<tc<<"in"<<endl;
 #endif
-    for(int i=maxId-maxId%threadNum+tc;i>=0;i-=threadNum){
-        if(G[i][0]){
-            for(int i1=GInv[i][0];i1>0;i1--){  //反序遍历第1层
+    for(int i=maxId-maxId%threadNum+tc;i>=0;i-=threadNum)
+    {
+        if(G[i][0])
+        {
+            for(int i1=GInv[i][0];i1>0;i1--)
+            {  //反序遍历第1层
                 int &v1=GInv[i][i1];
                 if(v1<=i) break;
                 reachable[tc][v1]=true;  //正向一层可到达
                 reachableInv[tc][v1]=true;
                 reachables[tc][++reachables[tc][0]]=v1;
                 reachableInvs[tc][++reachableInvs[tc][0]]=v1;
-                for(int i2=GInv[v1][0];i2>0;i2--){  //反序遍历第2层
+                for(int i2=GInv[v1][0];i2>0;i2--)
+                {  //反序遍历第2层
                     int &v2=GInv[v1][i2];
                     if(v2<=i) break;
                     reachableInv[tc][v2]=true;
                     reachableInvs[tc][++reachableInvs[tc][0]]=v2;
-                    for(int i3=GInv[v2][0];i3>0;i3--){  //反序遍历第3层
+                    for(int i3=GInv[v2][0];i3>0;i3--)
+                    {  //反序遍历第3层
                         int &v3=GInv[v2][i3];
                         if(v3<=i) break;
                         reachableInv[tc][v3]=true;
@@ -230,7 +263,7 @@ void *run(void *threadInfo)
             for(int i1=1;i1<=G[i][0];i1++)  //查找，out的第0个元素为环的长度，第1个元素为始节点，从第2个开始的节点倒序存储
             {  
                 int &u2=G[i][i1];  //环中的第二个点
-                if(u2<=i) break;
+                if(u2<i) break;
                 out[++out[0]]=u2;
                 visit[tc][u2]=true;
                 for(int i2=1;i2<=G[u2][0];i2++)
@@ -239,7 +272,7 @@ void *run(void *threadInfo)
                     if(u3<=i) break;
                     out[++out[0]]=u3;
                     visit[tc][u3]=true;
-                    if(reachable[u3])
+                    if(reachable[tc][u3])
                     {
                         results[tc][3][0]+=3;  //检测到长度为3的环
                         int n=results[tc][3][0];
@@ -256,7 +289,7 @@ void *run(void *threadInfo)
                         if(visit[tc][u4]) continue;
                         out[++out[0]]=u4;
                         visit[tc][u4]=true;
-                        if(reachable[u4])
+                        if(reachable[tc][u4])
                         {
                             results[tc][4][0]+=4;  //检测到长度为4的环
                             int n=results[tc][4][0];
@@ -273,7 +306,7 @@ void *run(void *threadInfo)
                             if(visit[tc][u5]||(!reachableInv[tc][u5])) continue;
                             out[++out[0]]=u5;
                             visit[tc][u5]=true;
-                            if(reachable[u5])
+                            if(reachable[tc][u5])
                             {
                                 results[tc][5][0]+=5;  //检测到长度为5的环
                                 int n=results[tc][5][0];
@@ -290,7 +323,7 @@ void *run(void *threadInfo)
                                 if(visit[tc][u6]||(!reachableInv[tc][u6])) continue;
                                 out[++out[0]]=u6;
                                 visit[tc][u6]=true;
-                                if(reachable[u6])
+                                if(reachable[tc][u6])
                                 {
                                     results[tc][6][0]+=6;  //检测到长度为6的环
                                     int n=results[tc][6][0];
@@ -307,7 +340,7 @@ void *run(void *threadInfo)
                                     if(visit[tc][u7]||(!reachableInv[tc][u7])) continue;
                                     out[++out[0]]=u7;
                                     visit[tc][u7]=true;
-                                    if(reachable[u7])
+                                    if(reachable[tc][u7])
                                     {
                                         results[tc][7][0]+=7;  //检测到长度为6的环
                                         int n=results[tc][7][0];
@@ -346,12 +379,34 @@ void *run(void *threadInfo)
             reachable[tc][reachables[tc][i]]=false;
         }
         reachables[tc][0]=0;
-        int m=reachableInvs[tc][0];
+        m=reachableInvs[tc][0];
         for(int i=1;i<=m;i++){
             reachableInv[tc][reachableInvs[tc][i]]=false;
         }
         reachableInvs[tc][0]=0;
     }
+
+    //resultSize
+    int len=0;
+    for(int l=lowDepth;l<=highDepth;l++)
+    {
+        int index=results[tc][l][0];
+        for(int i=tc;i<=maxId-maxId%threadNum+tc;i+=threadNum)
+        {
+            len=0;
+            //resultSize[tc][l][i]
+            while(index>=l&&results[tc][l][index]==i)
+            {
+                for(int n=0;n<l;n++)
+                {
+                    len+=strSize[results[tc][l][index+n]];
+                }
+                index-=l;
+            }
+            resultSize[tc][l][i]=len;
+        }
+    }
+
 
 #ifdef TEST
     cout<<"thread"<<tc<<" rings: "<<ringCnt[tc]<<endl;
@@ -383,6 +438,52 @@ void solve()
 #endif
 }
 
+void *runCpy(void *threadInfo)
+{
+    //在多线程中拼接字符串
+    ThreadInfo* info = (ThreadInfo*)threadInfo;
+    //int l=info->l, r=info->r;
+    int tc=info->threadCnt;
+    for(int l=lowDepth;l<=highDepth;l++)
+    {
+        //for(int k=0;k<=maxId;k++)
+        for(int i=tc;i<=maxId-maxId%threadNum+tc;i+=threadNum)
+        {
+            int index=results[tc][l][0];
+            int len=resultOffSet[tc][l][i];
+            while(index>=l&&results[tc][l][index]==i)
+            {
+                for(int n=0;n<l-1;n++)
+                {
+                    int &sz=strSize[results[tc][l][index+n]];
+                    memcpy(resultData+len,idCom[results[tc][l][index+n]].c_str(),sz);
+                    len+=sz;
+                }
+                int &sz=strSize[results[tc][l][index+l-1]];
+                memcpy(resultData+len,idLF[results[tc][l][index+l-1]].c_str(),sz);
+                len+=sz;
+                results[tc][l][0]-=l;
+                index-=l;
+            }
+            // int idx=k%threadNum;  //获取id的尾号
+            // int index=results[idx][l][0];
+            // while(index>=l&&results[idx][l][index]==k)
+            // {
+            //     for(int n=0;n<l-1;n++)
+            //     {
+            //         int &sz=strSize[results[idx][l][index+n]];
+            //         memcpy(resultData+len,idCom[results[idx][l][index+n]].c_str(),sz);
+            //         len+=sz;
+            //     }
+            //     int &sz=strSize[results[idx][l][index+l-1]];
+            //     memcpy(resultData+len,idLF[results[idx][l][index+l-1]].c_str(),sz);
+            //     len+=sz;
+            //     results[idx][l][0]-=l;
+            //     index-=l;
+            // }
+        }
+    }
+}
 
 void saveData()
 {
@@ -399,36 +500,74 @@ void saveData()
     cout<<"total rings: "<<totalRings<<endl;
 #endif
     string tmp=(to_string(totalRings)+'\n').c_str();
-    int len=tmp.size();
-    memcpy(resultData,tmp.c_str(),len);
+    totalLength=tmp.size();
+    memcpy(resultData,tmp.c_str(),totalLength);
+    //获取偏移量
     for(int l=lowDepth;l<=highDepth;l++)
     {
-        for(int tc=0;tc<threadNum;tc++){
-            int n=results[tc][l][0];
-            for(int i=n;i>=l;i-=l){
-                for(int j=1;j<l;j++){
-                    int &sz=strSize[results[tc][l][i]];
-                    memcpy(resultData+len,idCom[results[tc][l][i]].c_str(),sz);
-                    len+=sz;
-                    i++;
-                }
-                int &sz=strSize[results[tc][l][i]];
-                memcpy(resultData+len,idLF[results[tc][l][i]].c_str(),sz);
-                len+=sz;
-                i-=l-1;
-                //resultStr+=idLF[results[l][i]];
+        for(int k=0;k<=maxId;k++)
+        {
+            int idx=k%threadNum;
+            if(k==0&&l==3){
+                resultOffSet[idx][l][k]=totalLength;
+                continue;
+            }
+            if(k==0&&l!=3){
+                resultOffSet[idx][l][k]=resultOffSet[maxId%threadNum][l-1][maxId]+resultSize[maxId%threadNum][l-1][maxId];
+                continue;
+            }
+            if(idx){
+                resultOffSet[idx][l][k]=resultOffSet[idx-1][l][k-1]+resultSize[idx-1][l][k-1];
+            }
+            else if(idx==0){
+                resultOffSet[idx][l][k]=resultOffSet[threadNum-1][l][k-1]+resultSize[threadNum-1][l][k-1];
+                //cout<<resultOffSet[idx][l][k]<<" ";
             }
         }
     }
+    totalLength=resultOffSet[maxId%threadNum][7][maxId]+resultSize[maxId%threadNum][7][maxId];
+
+    //多线程拼接字符串结果
+    for(int i=0;i<threadNum;i++){
+        pthread_create(&tids[i], NULL, runCpy, (void *)&(infos[i]));
+    }
+    //等待结果
+    for(int i=0;i<threadNum;i++){
+        pthread_join(tids[i], NULL);
+    }
+
+
+    // for(int l=lowDepth;l<=highDepth;l++)
+    // {
+    //     for(int k=0;k<=maxId;k++)
+    //     {
+    //         int idx=k%threadNum;  //获取id的尾号
+    //         int index=results[idx][l][0];
+    //         while(index>=l&&results[idx][l][index]==k)
+    //         {
+    //             for(int n=0;n<l-1;n++)
+    //             {
+    //                 int &sz=strSize[results[idx][l][index+n]];
+    //                 memcpy(resultData+len,idCom[results[idx][l][index+n]].c_str(),sz);
+    //                 len+=sz;
+    //             }
+    //             int &sz=strSize[results[idx][l][index+l-1]];
+    //             memcpy(resultData+len,idLF[results[idx][l][index+l-1]].c_str(),sz);
+    //             len+=sz;
+    //             results[idx][l][0]-=l;
+    //             index-=l;
+    //         }
+    //     }
+    // }
     
     //mmap写到文件
     int fd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
     //int len=resultStr.length();
-    ftruncate(fd,len);
+    int res=ftruncate(fd,totalLength);
     int strLen=1024*1024;
     char* pbuf=NULL;
-    int cnt=len/strLen;
-    int mod=len%strLen;
+    int cnt=totalLength/strLen;
+    int mod=totalLength%strLen;
 #ifdef TEST
     cout<<cnt<<"MB+"<<mod<<endl;
 #endif
@@ -448,7 +587,6 @@ void saveData()
 }
 
 
-
 int main(int argc, char *argv[])
 {
 #ifdef TEST
@@ -458,9 +596,8 @@ int main(int argc, char *argv[])
     testFile="/data/test_data.txt";
     resultFile="/projects/student/result.txt";
 #endif
-    //Solution solution(testFile,resultFile);
+
     loadData();
-    //constructGraph();
     simplifyAndSort();
     solve();
     saveData();
