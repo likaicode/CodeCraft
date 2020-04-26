@@ -73,14 +73,14 @@ int *resultOffSet[threadNum][8];
 
 //int inDegrees[280000];
 //int outDegrees[280000];
-// struct ThreadInfo{  //每个线程的左右边界
-//     //int l;
-//     //int r;
-//     int threadCnt;
-// };
+struct ThreadInfo{  //每个线程的序号
+    //int l;
+    //int r;
+    int tc;
+};
 
 //int infoTmp[30];
-//ThreadInfo infos[threadNum];
+ThreadInfo infos[threadNum];
 pthread_t tids[threadNum];
 
 char str[30];
@@ -200,15 +200,14 @@ void simplifyAndSort()
 #endif
 }
 
-void *run(void *arg)
+void *run(void *threadInfo)
 {
     //solveDFS的外循环，可以用多线程来并行优化
     //if(nodeCnt>20000) openThread=true;    //当图的节点比较多时，才会采用多线程dfs
     //多线程dfs方法：将nodeCnt个节点分为threadNum块，开启threadNum个线程并在每个线程中搜索指定范围内的节点是否成环，G和R是线程共享的
-    int tc=(long)arg;
-    //ThreadInfo* info = (ThreadInfo*)threadInfo;
+    ThreadInfo* info = (ThreadInfo*)threadInfo;
     //int l=info->l, r=info->r;
-    //int tc=info->threadCnt;
+    int tc=info->tc;
     int out[8];
     out[0]=0;
 #ifdef TEST
@@ -417,8 +416,8 @@ void solve()
 #endif
 
     for(int i=0;i<threadNum;i++){
-        //infos[i].threadCnt=i;
-        pthread_create(&tids[i], NULL, run, (void *)(i));
+        infos[i].tc=i;
+        pthread_create(&tids[i], NULL, run, (void *)&(infos[i]));
     }
     //主线程充当第0个线程来计算
 
@@ -431,12 +430,12 @@ void solve()
 #endif
 }
 
-void *runCpy(void *arg)
+void *runCpy(void *threadInfo)
 {
     //在多线程中拼接字符串
-    //ThreadInfo* info = (ThreadInfo*)threadInfo;
+    ThreadInfo* info = (ThreadInfo*)threadInfo;
     //int l=info->l, r=info->r;
-    int tc=(long)arg;
+    int tc=info->tc;
     char *pbuf=(char *)mmap(NULL,totalLength,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,0);
     for(int l=lowDepth;l<=highDepth;l++)
     {
@@ -535,7 +534,8 @@ void saveData()
 
     //多线程拼接字符串结果
     for(int i=0;i<threadNum;i++){
-        pthread_create(&tids[i], NULL, runCpy, (void *)(i));
+        infos[i].tc=i;
+        pthread_create(&tids[i], NULL, runCpy, (void *)&(infos[i]));
     }
     for(int i=0;i<threadNum;i++){
         pthread_join(tids[i], NULL);
