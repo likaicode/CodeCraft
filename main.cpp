@@ -26,8 +26,6 @@ int nodeCnt=0;
 //int ringCnt=0;   //记录总环数
 int ringCnt[threadNum];
 
-//vector<unordered_map<int,vector<int>>> R;
-
 //int inputs[560001];
 int G[280000][50];    //G[u][v]
 int GInv[280000][50]; //G[v][u]
@@ -35,13 +33,16 @@ string idCom[280000];
 string idLF[280000];
 //const char *idCom[280000];
 //const char *idLF[280000];
+
 int strSize[280000];
 int totalLength;
-char resultData[300000000];
-int outfd;
-int perCnt;
-int strLen=1024*1024;
+//char resultData[300000000];
+
+int outfd;                //输出文件的描述符
+int perCnt;               //多线程写时每个线程负责perCnt×strLen个字节
+int strLen=1024*1024;     //1M的文件大小
 //int queue[50000];
+
 bool visit[threadNum][280000];
 bool reachable[threadNum][280000];
 bool reachableInv[threadNum][280000];
@@ -141,13 +142,14 @@ void loadData()
                 }
                 ++p;
                 flag=true;
+                //线上提交
+                //if(id1>50000||id2>50000) continue;
                 G[id1][++G[id1][0]]=id2;
                 GInv[id2][++GInv[id2][0]]=id1;
             }
             ++p;
         }
         ++p;
-
         //++inDegrees[id2];
         //++outDegrees[id1];
     }
@@ -184,34 +186,15 @@ void simplifyAndSort()
 #ifdef TEST
     cout<<"sorting..."<<endl;
 #endif
-    //对id号进行分块，4线程为例，总结点数除以20(4*5)得到perCnt，第0个线程从0到perCnt倒序遍历，第1个线程从perCnt到2×perCnt，第2个从2×perCnt到4×perCnt，第3个负责剩下的
-    //int perCnt=nodeCnt/(threadNum*(threadNum+1));
-    //int perCnt=nodeCnt/threadNum;
-    //int nodetmp=0;
-    //int tc=0;
     for(int i=0;i<=maxId;i++){
         if(G[i][0]&&GInv[i][0]){
-            // ++nodetmp;
-            // if(nodetmp==1){
-            //     infos[0].l=i-1;
-            //     ++tc;
-            // }
-            // else if(nodetmp==tc*perCnt){
-            //     infos[tc-1].r=i; //左开右闭
-            //     infos[tc].l=i;
-            //     ++tc;
-            // }
-
             sort(G[i]+1,G[i]+G[i][0]+1,greater<int>());
             sort(GInv[i]+1,GInv[i]+GInv[i][0]+1);
             continue;
         }
         if(G[i][0]) G[i][0]=0;
         if(GInv[i][0]) GInv[i][0]=0;
-            //q[q[1]++]=i;
-            //q.push(i);
     }
-    //infos[tc-1].r=maxId;
 #ifdef TEST
     cout<<"done!"<<endl;
 #endif
@@ -222,7 +205,6 @@ void *run(void *arg)
     //solveDFS的外循环，可以用多线程来并行优化
     //if(nodeCnt>20000) openThread=true;    //当图的节点比较多时，才会采用多线程dfs
     //多线程dfs方法：将nodeCnt个节点分为threadNum块，开启threadNum个线程并在每个线程中搜索指定范围内的节点是否成环，G和R是线程共享的
-    //每个线程访问自己的reachable和currentJs
     int tc=(long)arg;
     //ThreadInfo* info = (ThreadInfo*)threadInfo;
     //int l=info->l, r=info->r;
@@ -374,7 +356,6 @@ void *run(void *arg)
             visit[tc][i]=false;
         }
 
-
         //将反序表遍历的标记清除
         for(int i1=GInv[i][0];i1>0;i1--)
         {  //反序遍历第1层
@@ -396,16 +377,6 @@ void *run(void *arg)
             }
         }
 
-        // int m=reachables[tc][0];
-        // for(int i=1;i<=m;i++){
-        //     reachable[tc][reachables[tc][i]]=false;
-        // }
-        // reachables[tc][0]=0;
-        // m=reachableInvs[tc][0];
-        // for(int i=1;i<=m;i++){
-        //     reachableInv[tc][reachableInvs[tc][i]]=false;
-        // }
-        // reachableInvs[tc][0]=0;
     }
 
     //resultSize
@@ -466,6 +437,7 @@ void *runCpy(void *arg)
     //ThreadInfo* info = (ThreadInfo*)threadInfo;
     //int l=info->l, r=info->r;
     int tc=(long)arg;
+    char *pbuf=(char *)mmap(NULL,totalLength,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,0);
     for(int l=lowDepth;l<=highDepth;l++)
     {
         //for(int k=0;k<=maxId;k++)
@@ -478,19 +450,21 @@ void *runCpy(void *arg)
                 for(int n=0;n<l-1;n++)
                 {
                     int &sz=strSize[results[tc][l][index+n]];
-                    memcpy(resultData+len,idCom[results[tc][l][index+n]].c_str(),sz);
+                    memcpy(pbuf+len,idCom[results[tc][l][index+n]].c_str(),sz);
                     len+=sz;
                 }
                 int &sz=strSize[results[tc][l][index+l-1]];
-                memcpy(resultData+len,idLF[results[tc][l][index+l-1]].c_str(),sz);
+                memcpy(pbuf+len,idLF[results[tc][l][index+l-1]].c_str(),sz);
                 len+=sz;
                 results[tc][l][0]-=l;
                 index-=l;
             }
         }
     }
+    munmap(pbuf,totalLength);
 }
 
+/*
 void *runWrite(void *arg)
 {
     //mmap
@@ -505,6 +479,7 @@ void *runWrite(void *arg)
     }
     //cout<<"thread out"<<tc<<endl;
 }
+*/
 
 void saveData()
 {
@@ -522,7 +497,7 @@ void saveData()
 #endif
     string tmp=(to_string(totalRings)+'\n').c_str();
     totalLength=tmp.size();
-    memcpy(resultData,tmp.c_str(),totalLength);
+    //memcpy(resultData,tmp.c_str(),totalLength);
     //获取偏移量
     for(int l=lowDepth;l<=highDepth;l++)
     {
@@ -548,29 +523,30 @@ void saveData()
     }
     totalLength=resultOffSet[maxId%threadNum][7][maxId]+resultSize[maxId%threadNum][7][maxId];
 
-    //多线程拼接字符串结果
-    for(int i=0;i<threadNum;i++){
-        pthread_create(&tids[i], NULL, runCpy, (void *)(i));
-    }
-    //等待结果
-    for(int i=0;i<threadNum;i++){
-        pthread_join(tids[i], NULL);
-    }
-
     //扩充文件大小
     outfd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
-    int res=ftruncate(outfd,totalLength);
+    int ret1=ftruncate(outfd,totalLength);
+    int ret2=write(outfd,tmp.c_str(),tmp.size());
     int cnt=totalLength/strLen;
     int mod=totalLength%strLen;
 #ifdef TEST
     cout<<cnt<<"MB+"<<mod<<endl;
 #endif
 
+    //多线程拼接字符串结果
+    for(int i=0;i<threadNum;i++){
+        pthread_create(&tids[i], NULL, runCpy, (void *)(i));
+    }
+    for(int i=0;i<threadNum;i++){
+        pthread_join(tids[i], NULL);
+    }
+
+/*
     int writeThreadNum=0;
     if(cnt>12){
         writeThreadNum=3;  //结果文件大于12M，开3个线程，第4个线程为主线程
     }
-    //mmap写到文件
+    //mmap多线程写到文件
     if(writeThreadNum==0)
     {
         char* pbuf=NULL;
@@ -607,6 +583,7 @@ void saveData()
             pthread_join(tids[i], NULL);
         }
     }
+*/
     close(outfd);
 #ifdef TEST
     cout<<"done!"<<endl;
@@ -620,8 +597,8 @@ int main(int argc, char *argv[])
     testFile="./data/test_data.txt";
     resultFile="./projects/student/result.txt";
 #else
-    testFile="./data/test_data.txt";
-    resultFile="./projects/student/result.txt";
+    testFile="/data/test_data.txt";
+    resultFile="/projects/student/result.txt";
 #endif
 
     loadData();
