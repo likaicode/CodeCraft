@@ -29,15 +29,22 @@ unordered_map<ull, int> idCash;
 vector<uint> ids; //0...n to sorted id
 vector<uint> inputs; //u-v pairs
 //vector<int> inDegrees;
+vector<bool> visit[threadNum];
+vector<bool> reachable[threadNum];
+vector<bool> reachableInv[threadNum];
+
 int nodeCnt;
+int maxId;
+int totalLength;
+int outfd;
+int strLen=1024*1024;
+char* mpbuf;
 int ringCnt[threadNum];
 vector<vector<uint>> results[threadNum][8];
 vector<int> resultSize[threadNum][8];   //每个id开头的字节长度，用于计算偏移量
 vector<int> resultOffSet[threadNum][8];  //memcpy拷贝时的resultData偏移量
 
-vector<bool> visit[threadNum];
-vector<bool> reachable[threadNum];
-vector<bool> reachableInv[threadNum];
+
 
 struct ThreadInfo{  //每个线程的序号
     //int l;
@@ -117,6 +124,7 @@ void constructGraph()
     cout<<"total nodes: "<<nodeCnt<<endl;
 #endif
     int sz=inputs.size();
+    maxId=nodeCnt-1;
     G.resize(nodeCnt+threadNum);
     GInv.resize(nodeCnt+threadNum);
     //inDegrees=vector<int>(nodeCnt,0);
@@ -132,7 +140,7 @@ void constructGraph()
     for(int i=0;i<nodeCnt;i++){
         idCom[i]=to_string(ids[i])+',';
         idLF[i]=to_string(ids[i])+'\n';
-        strSize[i]=idCom[i].size()+1;
+        strSize[i]=idCom[i].size();
         sort(G[i].begin(),G[i].end(),greater<int>());
         sort(GInv[i].begin(),GInv[i].end(),greater<int>());
     }
@@ -140,7 +148,7 @@ void constructGraph()
 
 bool checkAns(vector<uint> tmp, int depth){
     for (int i=0;i<depth;i++){
-        int l=tmp[(i+depth-1)%depth], m=tmp[i], r=tmp[(i+1)%depth];
+        uint l=ids[tmp[(i+depth-1)%depth]], m=ids[tmp[i]], r=ids[tmp[(i+1)%depth]];
         if (!check(idCash[(ull)l<<32 | m], idCash[(ull)m<<32 | r])) return false;
     }
     return true;
@@ -182,7 +190,7 @@ void *run(void *threadInfo)
     }
     int out[8];
     out[0]=0;
-    for(int i=nodeCnt-nodeCnt%threadNum+tc;i>=0;i-=threadNum)
+    for(int i=maxId-maxId%threadNum+tc;i>=0;i-=threadNum)
     {
         if(!G[i].empty()&&!GInv[i].empty())
         {
@@ -216,10 +224,8 @@ void *run(void *threadInfo)
                     out[++out[0]]=u3;
                     visit[tc][u3]=true;
                     if(reachable[tc][u3]){  //检测到长度为3的环
-                        vector<uint> tmp(out[0]);
-                        for(int i=1;i<=out[0];i++)
-                            tmp[i-1]=ids[out[i]];
-                        if(checkAns(tmp,out[0])){    //check需要实际的id
+                        vector<uint> tmp(out+1,out+out[0]+1);
+                        if(checkAns(tmp,out[0])){
                             results[tc][out[0]].emplace_back(tmp);
                             ++ringCnt[tc];
                         }
@@ -231,9 +237,7 @@ void *run(void *threadInfo)
                         out[++out[0]]=u4;
                         visit[tc][u4]=true;
                         if(reachable[tc][u4]){  //检测到长度为4的环
-                            vector<uint> tmp(out[0]);
-                            for(int i=1;i<=out[0];i++)
-                                tmp[i-1]=ids[out[i]];
+                            vector<uint> tmp(out+1,out+out[0]+1);
                             if(checkAns(tmp,out[0])){
                                 results[tc][out[0]].emplace_back(tmp);
                                 ++ringCnt[tc];
@@ -246,9 +250,7 @@ void *run(void *threadInfo)
                             out[++out[0]]=u5;
                             visit[tc][u5]=true;
                             if(reachable[tc][u5]){  //检测到长度为5的环
-                                vector<uint> tmp(out[0]);
-                                for(int i=1;i<=out[0];i++)
-                                    tmp[i-1]=ids[out[i]];
+                                vector<uint> tmp(out+1,out+out[0]+1);
                                 if(checkAns(tmp,out[0])){
                                     results[tc][out[0]].emplace_back(tmp);
                                     ++ringCnt[tc];
@@ -261,9 +263,7 @@ void *run(void *threadInfo)
                                 out[++out[0]]=u6;
                                 visit[tc][u6]=true;
                                 if(reachable[tc][u6]){  //检测到长度为6的环
-                                    vector<uint> tmp(out[0]);
-                                    for(int i=1;i<=out[0];i++)
-                                        tmp[i-1]=ids[out[i]];
+                                    vector<uint> tmp(out+1,out+out[0]+1);
                                     if(checkAns(tmp,out[0])){
                                         results[tc][out[0]].emplace_back(tmp);
                                         ++ringCnt[tc];
@@ -276,9 +276,7 @@ void *run(void *threadInfo)
                                     out[++out[0]]=u7;
                                     visit[tc][u7]=true;
                                     if(reachable[tc][u7]){  //检测到长度为7的环
-                                        vector<uint> tmp(out[0]);
-                                        for(int i=1;i<=out[0];i++)
-                                            tmp[i-1]=ids[out[i]];
+                                        vector<uint> tmp(out+1,out+out[0]+1);
                                         if(checkAns(tmp,out[0])){
                                             results[tc][out[0]].emplace_back(tmp);
                                             ++ringCnt[tc];
@@ -329,18 +327,22 @@ void *run(void *threadInfo)
     for(int l=lowDepth;l<=highDepth;l++)
     {
         int index=results[tc][l].size()-1;
-        for(int i=tc;i<=nodeCnt-nodeCnt%threadNum+tc;i+=threadNum)
+        for(int i=tc;i<=maxId-maxId%threadNum+tc;i+=threadNum)
         {
+            
             len=0;
             while(index>=0&&results[tc][l][index][0]==i)
             {
                 for(int n=0;n<l;n++)
                 {
                     len+=strSize[results[tc][l][index][n]];
+                    //cout<<len;
                 }
                 --index;
             }
+            //if(i==idHash[6050]) cout<<len<<" ";
             resultSize[tc][l][i]=len;
+            //cout<<len;
         }
     }
 #ifdef TEST
@@ -369,6 +371,38 @@ void solve()
 #endif
 }
 
+void *runCpy(void *threadInfo)
+{
+    //在多线程中mmap写字符串
+    ThreadInfo* info = (ThreadInfo*)threadInfo;
+    int tc=info->tc;
+    char* pbuf=mpbuf;
+    
+    for(int l=lowDepth;l<=highDepth;l++)
+    {
+        int index=results[tc][l].size()-1;
+        for(int i=tc;i<=maxId-maxId%threadNum+tc;i+=threadNum)
+        {
+            int len=resultOffSet[tc][l][i];
+            while(index>=0&&results[tc][l][index][0]==i)
+            {
+                for(int n=0;n<l-1;n++)
+                {
+                    int &sz=strSize[results[tc][l][index][n]];
+                    memcpy(pbuf+len,idCom[results[tc][l][index][n]].c_str(),sz);
+                    len+=sz;
+                }
+                int &sz=strSize[results[tc][l][index][l-1]];
+                memcpy(pbuf+len,idLF[results[tc][l][index][l-1]].c_str(),sz);
+                len+=sz;
+                //results[tc][l][0]-=l;
+                --index;
+            }
+        }
+    }
+    
+}
+
 void saveData()
 {
     //多线程mmap分块写数据
@@ -380,6 +414,52 @@ void saveData()
     cout<<"saving data..."<<endl;
     cout<<"total rings: "<<totalRings<<endl;
 #endif
+    string tmp=to_string(totalRings)+'\n';
+    totalLength=tmp.size();
+    //获取偏移量
+    for(int l=lowDepth;l<=highDepth;l++)
+    {
+        for(int k=0;k<=maxId;k++)
+        {
+            int idx=k%threadNum;
+            if(k==0&&l==3){
+                resultOffSet[idx][l][k]=totalLength;
+                continue;
+            }
+            if(k==0&&l!=3){
+                resultOffSet[idx][l][k]=resultOffSet[maxId%threadNum][l-1][maxId]+resultSize[maxId%threadNum][l-1][maxId];
+                continue;
+            }
+            if(idx){
+                resultOffSet[idx][l][k]=resultOffSet[idx-1][l][k-1]+resultSize[idx-1][l][k-1];
+            }
+            else if(idx==0){
+                resultOffSet[idx][l][k]=resultOffSet[threadNum-1][l][k-1]+resultSize[threadNum-1][l][k-1];
+            }
+        }
+    }
+    totalLength=resultOffSet[maxId%threadNum][7][maxId]+resultSize[maxId%threadNum][7][maxId];
+
+    //扩充文件大小
+    outfd = open(resultFile.c_str(),O_RDWR|O_CREAT,0666);
+    int ret1=ftruncate(outfd,totalLength);
+    int ret2=write(outfd,tmp.c_str(),tmp.size());
+    int cnt=totalLength/strLen;
+    int mod=totalLength%strLen;
+#ifdef TEST
+    cout<<cnt<<"MB+"<<mod<<endl;
+#endif
+    //多线程拼接字符串结果
+    mpbuf=(char *)mmap(NULL,totalLength,PROT_READ|PROT_WRITE,MAP_SHARED,outfd,0);
+    for(int i=0;i<threadNum;i++){
+        pthread_create(&tids[i], NULL, runCpy, (void *)&(infos[i]));
+    }
+    for(int i=0;i<threadNum;i++){
+        pthread_join(tids[i], NULL);
+    }
+    munmap(mpbuf,totalLength);
+    close(outfd);
+
     // FILE *fp = fopen(resultFile.c_str(), "wb");
     // char buf[1024];
     // int idx=sprintf(buf,"%d\n",totalRings);
